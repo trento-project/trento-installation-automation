@@ -1,0 +1,44 @@
+# Python virtual environments
+/.venv*
+
+# Generated artifacts
+/certs
+/inventories
+/logs
+
+# Environment and configuration
+.env
+*.conf
+.machines.conf.csv
+
+# Terraform state files
+/terraform/*.tfstate
+/terraform/*.tfstate.*
+/terraform/.terraform.tfstate.lock.info
+
+# Terraform plan files
+/terraform/*.tfplan
+
+# Terraform plugin directory
+/terraform/.terraform/
+
+# Terraform lock file (auto-generated)
+/terraform/.terraform.lock.hcl
+
+# Terraform variable files
+/terraform/*.tfvars
+/terraform/*.tfvars.json
+# But allow example files
+!/terraform/*.tfvars.example
+
+# Terraform override files
+/terraform/crash.log
+/terraform/crash.*.log
+/terraform/override.tf
+/terraform/override.tf.json
+/terraform/*_override.tf
+/terraform/*_override.tf.json
+
+# OS files
+.DS_Store
+Thumbs.db

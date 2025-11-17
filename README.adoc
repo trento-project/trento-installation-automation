@@ -1,0 +1,250 @@
+= Trento Installation Tests
+:toc:
+:toclevels: 2
+
+Automated provisioning and testing of Trento installations on Azure using Terraform, Bash scripts, and Ansible.
+
+== Overview
+
+This project automates the deployment and configuration of Trento Server on multiple SUSE Linux Enterprise Server (SLES) versions in Azure. It provisions VMs, registers them with SUSE, configures custom RPM repositories, and runs Ansible playbooks for Trento installation.
+
+=== Purpose: Testing Maintenance RPM Artifacts
+
+The primary purpose of this tool is to test **maintenance RPM artifacts** that are behind the VPN and not publicly available. These artifacts must be uploaded to Azure Blob Storage before running the automation.
+
+**How it works:**
+
+* If RPM artifacts are present in your configured Azure Blob Storage, the tool downloads and installs them as a custom zypper repository
+* If no artifacts are found in Blob Storage, Trento will be installed from the **current stable release** available in the official zypper repositories
+
+This allows testing pre-release or maintenance versions of Trento before they are publicly released.
+
+=== Supported SLES Versions
+
+* SLES 15 SP4
+* SLES 15 SP5
+* SLES 15 SP6
+* SLES 15 SP7
+* SLES 16 (limited support - manual installation only)
+
+=== SLES 16 Limitations
+
+SLES 16 VMs are provisioned and registered with SUSEConnect, but:
+
+* No automatic module activation
+* No custom RPM repository setup
+* No Ansible playbook execution
+* No SSL certificate generation
+* Trento installation must be performed manually
+
+**Why?** `azcopy` is not available for SLES 16 yet, which is required to download RPM artifacts from Azure Blob Storage.
+
+=== Helm Suffix Behavior
+
+VMs with `helm` suffix are provisioned and registered with SUSEConnect only (similar to SLES 16 behavior):
+
+* System registration via SUSEConnect
+* No module activation
+* No custom RPM repository setup
+* No Ansible playbook execution
+* No SSL certificate generation
+* Trento Helm installation must be performed manually
+
+This is useful for testing Helm-based Trento installations where manual Kubernetes/Helm setup is required.
+
+== Requirements
+
+* **SUSE Linux machine** (this project only runs on SUSE systems)
+* Azure subscription with existing resource group
+* **Terraform** (>= 1.0) installed and in PATH
+* **Python 3** with pip (for Ansible virtual environment)
+* **Ansible** (installed automatically in `.venv-ansible/`)
+* **Trento Ansible project** - https://github.com/trento-project/ansible (cloned locally)
+* Azure CLI (`az`) authenticated
+* SSH key pair for VM access
+* SUSE registration credentials (email and registration code)
+* Bash 4.0+
+
+[WARNING]
+====
+**Test in a dedicated resource group first!**
+
+This automation creates and modifies Azure resources. Before running on shared resource groups:
+
+1. Create a new, isolated resource group for testing
+2. Verify all scripts work correctly with your configuration
+3. Review the cleanup script behavior (`cleanup-infrastructure.sh`)
+4. Ensure you have appropriate Azure permissions
+
+The cleanup script will delete **all VMs** in the specified resource group along with their associated resources (NICs, disks, public IPs).
+====
+
+== Quick Start
+
+. Clone the repository
++
+[source,bash]
+----
+git clone <repository-url>
+cd trento-installation-tests
+----
+
+. Create `.env` file with required configuration (see <<Configuration>>)
+
+. Define VMs in `.machines.conf.csv`
++
+[source,csv]
+----
+prefix,slesVersion,spVersion,suffix
+sles,15,5,rpm
+sles,15,6,rpm
+sles,15,7,helm
+sles,16,0,rpm
+----
+
+. Run the full pipeline
++
+[source,bash]
+----
+./run.sh
+----
+
+== Configuration
+
+=== Environment Variables (.env)
+
+Create a `.env` file in the project root:
+
+[source,bash]
+----
+# Azure Configuration
+AZURE_RESOURCE_GROUP="your-resource-group-name"
+AZURE_OWNER_TAG="your-name"
+AZURE_VMS_LOCATION="westeurope"
+
+# Azure Blob Storage (for custom RPM artifacts)
+AZURE_BLOB_STORAGE="your-storage-account"
+AZURE_BLOB_STORAGE_CONTAINER="your-container-name"
+AZURE_BLOB_STORAGE_SAS_TOKEN="your-sas-token"
+
+# Ansible Configuration
+ANSIBLE_PROJECT_PATH="/path/to/your/ansible/project"
+ANSIBLE_INVENTORIES_PATH="/path/to/inventories"
+ANSIBLE_PYTHON_EXEC="/usr/bin/python3"
+ANSIBLE_VM_CERTS_PATH="/path/to/certs"
+
+# SSH Configuration
+SSH_PRIVATE_KEY_PATH="/path/to/private/key"
+SSH_PUBLIC_KEY_CONTENT="ssh-ed25519 AAAA..."
+SSH_USER="azureadm"
+
+# SUSE Registration
+SUSE_REGISTRATION_EMAIL="your-email@example.com"
+SUSE_REGISTRATION_CODE="your-registration-code"
+----
+
+=== Machine Configuration (.machines.conf.csv)
+
+Define VMs with the following CSV format:
+
+[source,csv]
+----
+prefix,slesVersion,spVersion,suffix
+sles,15,5,rpm
+sles,15,6,rpm
+sles,15,7,helm
+sles,16,0,rpm
+----
+
+* **prefix**: VM name prefix
+* **slesVersion**: SLES major version (15 or 16)
+* **spVersion**: Service Pack version (0-7)
+* **suffix**: Installation type - **only `rpm` or `helm` are supported**
+** `rpm` - Full automated installation with custom RPM repository and Ansible
+** `helm` - Registration only, manual Trento Helm installation required
+
+[IMPORTANT]
+====
+The suffix field only accepts `rpm` or `helm`. Any other value will cause the script to fail with an error.
+====
+
+FQDN format: `{prefix}{slesVersion}sp{spVersion}{suffix}.{AZURE_VMS_LOCATION}.cloudapp.azure.com`
+
+== Pipeline Stages
+
+The automation runs these stages sequentially:
+
+. **Terraform Provisioning** - Creates Azure VMs based on CSV configuration
+. **SSH Known Hosts Cleanup** - Clears old SSH fingerprints
+. **Machine Setup** - Registers SUSE systems and configures repositories (parallel execution)
+. **SSL Certificate Generation** - Creates self-signed certificates for each VM
+. **Ansible Inventory Generation** - Creates inventory files for Ansible
+. **Ansible Playbook Execution** - Installs Trento via Ansible
+
+== Usage
+
+=== Full Pipeline
+
+[source,bash]
+----
+./run.sh
+----
+
+=== Individual Scripts
+
+[source,bash]
+----
+# Provision infrastructure
+./scripts/run-terraform.sh
+
+# Setup VMs (parallel)
+./scripts/setup-machines.sh
+
+# Generate certificates
+./scripts/generate-certs.sh
+
+# Generate Ansible inventories
+./scripts/generate-ansible-inventories.sh
+
+# Run Ansible playbooks
+./scripts/run-ansible-playbooks.sh
+----
+
+=== Cleanup Infrastructure
+
+Delete all VMs and their dependencies (preserves Storage Accounts and Container Registries):
+
+[source,bash]
+----
+./scripts/cleanup-infrastructure.sh
+----
+
+This script:
+
+* Deletes all VMs in the resource group
+* Removes associated NICs, disks, and public IPs
+* Runs multiple cleanup passes for reliability
+* Logs output to `logs/azure-delete-vm.log`
+
+=== Remove Generated Artifacts
+
+To clean up local generated files without destroying Azure infrastructure:
+
+[source,bash]
+----
+rm -rf certs .venv-ansible inventories logs
+----
+
+== Logs
+
+All stages produce detailed logs in the `logs/` directory:
+
+* `tf-apply.log` - Terraform provisioning output
+* `{vm_name}.log` - Individual VM setup logs
+* `generate-certs.log` - Certificate generation output
+* `ansible-run.log` - Ansible playbook execution
+* `azure-delete-vm.log` - Infrastructure cleanup log
+
+== License
+
+Apache License 2.0
