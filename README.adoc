@@ -168,7 +168,7 @@ sles,16,0,rpm
 The suffix field only accepts `rpm` or `helm`. Any other value will cause the script to fail with an error.
 ====
 
-FQDN format: `{prefix}{slesVersion}sp{spVersion}{suffix}.{AZURE_VMS_LOCATION}.cloudapp.azure.com`
+FQDN format: `<prefix><slesVersion>sp<spVersion><suffix>.<AZURE_VMS_LOCATION>.cloudapp.azure.com`
 
 == Pipeline Stages
 
@@ -240,7 +240,7 @@ rm -rf certs .venv-ansible inventories logs
 All stages produce detailed logs in the `logs/` directory:
 
 * `tf-apply.log` - Terraform provisioning output
-* `{vm_name}.log` - Individual VM setup logs
+* `<vm_name>.log` - Individual VM setup logs
 * `generate-certs.log` - Certificate generation output
 * `ansible-run.log` - Ansible playbook execution
 * `azure-delete-vm.log` - Infrastructure cleanup log
