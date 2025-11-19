@@ -1,0 +1,821 @@
+= Control-Target Node Testing Architecture
+:toc:
+:toclevels: 3
+:source-highlighter: rouge
+:icons: font
+
+== Overview
+
+This document describes a new testing architecture for Trento installations that separates concerns between *control nodes* (where Ansible executes from) and *target nodes* (where Trento Server is installed). This approach provides more realistic testing scenarios that mirror production deployment patterns.
+
+=== Key Changes from Current Implementation
+
+[cols="1,1,1"]
+|===
+|Aspect |Current Architecture |New Architecture
+
+|Ansible Execution
+|From CI/CD runner or local machine
+|From dedicated control nodes in Azure
+
+|Node Types
+|Single VM type (all-in-one)
+|Control nodes + Target nodes (paired)
+
+|Testing Scope
+|Installation verification
+|Full deployment + Ansible execution + verification
+
+|SLES Version Compatibility
+|Limited by runner OS
+|Tests actual OS compatibility matrix
+|===
+
+== Architecture Overview
+
+=== High-Level Architecture
+
+----
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Azure Pipelines                              │
+│                                                                       │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  1. Checkout Code                                            │   │
+│  │  2. Read Pair Configuration (.machines.pairs.csv)            │   │
+│  │  3. Provision Control + Target VMs via Terraform             │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                           Azure Cloud                                │
+│                                                                       │
+│  ┌────────────────────┐          ┌────────────────────┐            │
+│  │  Control Node      │          │  Target Node       │            │
+│  │  (SLES 15 SP6)     │          │  (SLES 15 SP6)     │            │
+│  │                    │          │                    │            │
+│  │  • SUSEConnect     │   SSH    │  • SUSEConnect     │            │
+│  │  • trento-ansible  ├─────────▶│  • Custom Repo     │            │
+│  │  • Certificates    │ Ansible  │  • trento-web      │            │
+│  │  • Inventory       │          │  • trento-wanda    │            │
+│  └────────────────────┘          └────────────────────┘            │
+│                                                                       │
+│  ┌────────────────────┐          ┌────────────────────┐            │
+│  │  Control Node      │          │  Target Node       │            │
+│  │  (SLES 15 SP6)     │          │  (SLES 16)         │            │
+│  │                    │          │                    │            │
+│  │  • trento-ansible  │   SSH    │  • SUSEConnect     │            │
+│  │  • Inventory       ├─────────▶│  • Custom Repo     │            │
+│  │  • Certificates    │ Ansible  │  • trento-web      │            │
+│  │                    │          │  • trento-wanda    │            │
+│  └────────────────────┘          └────────────────────┘            │
+│                                                                       │
+│  ┌────────────────────┐          ┌────────────────────┐            │
+│  │  Control Node      │          │  Target Node       │            │
+│  │  (SLES 15 SP4)     │          │  (SLES 15 SP4)     │            │
+│  │                    │          │                    │            │
+│  │  • trento-ansible  │   SSH    │  • trento-web      │            │
+│  │  • Inventory       ├─────────▶│  • trento-wanda    │            │
+│  │  • Certificates    │ Ansible  │                    │            │
+│  └────────────────────┘          └────────────────────┘            │
+│                                                                       │
+│  ┌────────────────────────────────────────────────────┐             │
+│  │          Azure Blob Storage                        │             │
+│  │                                                     │             │
+│  │  • trento-web.rpm                                  │             │
+│  │  • trento-wanda.rpm                                │             │
+│  │  • trento-ansible.rpm                              │             │
+│  └────────────────────────────────────────────────────┘             │
+└─────────────────────────────────────────────────────────────────────┘
+                                 │
+                                 ▼
+                     ┌───────────────────────┐
+                     │  Verification Step    │
+                     │  (curl to all targets)│
+                     └───────────────────────┘
+----
+
+=== Node Pairing Strategy
+
+Control nodes and target nodes are paired based on OS compatibility requirements:
+
+[cols="1,1,1"]
+|===
+|Control Node OS |Target Node OS |Reason
+
+|SLES 15 SP4
+|SLES 15 SP4
+|Version matching
+
+|SLES 15 SP5
+|SLES 15 SP5
+|Version matching
+
+|SLES 15 SP6
+|SLES 15 SP6
+|Version matching
+
+|SLES 15 SP7
+|SLES 15 SP7
+|Version matching
+
+|*SLES 15 SP6*
+|*SLES 16*
+|Ansible not compatible on SLES 16 as control node
+|===
+
+[IMPORTANT]
+====
+SLES 16 cannot be used as a control node because Ansible dependencies are not yet available. We use SLES 15 SP6 as the control node for SLES 16 targets.
+====
+
+== Deployment Flow
+
+=== Phase 0: Prerequisites (Manual)
+
+[source]
+----
+┌─────────────────────────────────────────┐
+│  Manual Upload to Azure Blob Storage    │
+│                                          │
+│  • trento-web.rpm                       │
+│  • trento-wanda.rpm                     │
+│  • trento-ansible.rpm                   │
+└─────────────────────────────────────────┘
+----
+
+=== Phase 1: Workflow Initialization
+
+[source]
+----
+┌────────────────────────┐
+│  Workflow Trigger      │
+│  (Manual/Scheduled)    │
+└───────────┬────────────┘
+            │
+            ▼
+┌────────────────────────┐
+│  Checkout Repository   │
+│  from GitHub           │
+└───────────┬────────────┘
+            │
+            ▼
+┌────────────────────────┐
+│  Parse Configuration   │
+│  .machines.pairs.csv   │
+└───────────┬────────────┘
+            │
+            ▼
+┌────────────────────────┐
+│  Generate Terraform    │
+│  variables for pairs   │
+└────────────────────────┘
+----
+
+=== Phase 2: Infrastructure Provisioning
+
+[source]
+----
+┌──────────────────────────┐
+│  Terraform Init & Plan   │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Terraform Apply         │
+│                          │
+│  For each pair:          │
+│  • Control VM            │
+│  • Target VM             │
+│  • Network config        │
+│  • Security groups       │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Wait for VMs Ready      │
+│  (cloud-init complete)   │
+└──────────────────────────┘
+----
+
+=== Phase 3: Control Node Setup
+
+[source]
+----
+For Each Control Node:
+
+┌──────────────────────────┐
+│  SSH Known Hosts Cleanup │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  SUSEConnect Register    │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Download from Blob:     │
+│  • trento-ansible.rpm    │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Create Local Repo       │
+│  (zypper addrepo)        │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Install Packages:       │
+│  • trento-ansible        │
+│  • ansible dependencies  │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Install SSH Keys        │
+│  (for target access)     │
+└──────────────────────────┘
+----
+
+[NOTE]
+====
+Control nodes do NOT install:
+
+* trento-web
+* trento-wanda
+* PostgreSQL
+* RabbitMQ
+
+They only need trento-ansible package and Ansible runtime.
+====
+
+=== Phase 4: Target Node Setup
+
+[source]
+----
+For Each Target Node:
+
+┌──────────────────────────┐
+│  SSH Known Hosts Cleanup │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  SUSEConnect Register    │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Download from Blob:     │
+│  • trento-web.rpm        │
+│  • trento-wanda.rpm      │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Create Local Repo       │
+│  (zypper addrepo)        │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Install Dependencies    │
+│  • PostgreSQL            │
+│  • RabbitMQ              │
+│  • Other system deps     │
+└──────────────────────────┘
+
+NOTE: Trento packages NOT installed yet
+      (Ansible will do this)
+----
+
+=== Phase 5: Certificate Generation
+
+[source]
+----
+For Each Target Node:
+
+┌──────────────────────────┐
+│  Generate SSL Cert       │
+│  • CN: <fqdn>            │
+│  • Self-signed           │
+│  • Valid 365 days        │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Transfer to Control     │
+│  • cert.pem              │
+│  • key.pem               │
+└──────────────────────────┘
+----
+
+=== Phase 6: Inventory Generation
+
+[source]
+----
+For Each Control-Target Pair:
+
+┌──────────────────────────┐
+│  Generate inventory.yml  │
+│                          │
+│  [trento_server]         │
+│  <target-fqdn>           │
+│                          │
+│  [vars]                  │
+│  • web_postgres_pass     │
+│  • wanda_postgres_pass   │
+│  • admin_user/pass       │
+│  • ssl_cert_path         │
+│  • ssl_key_path          │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Transfer to Control     │
+│  SCP inventory.yml       │
+└──────────────────────────┘
+----
+
+=== Phase 7: Ansible Execution
+
+[source]
+----
+For Each Control Node:
+
+┌──────────────────────────┐
+│  SSH to Control Node     │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Verify Ansible Setup    │
+│  • ansible --version     │
+│  • inventory exists      │
+│  • certs present         │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Run Ansible Playbook    │
+│                          │
+│  ansible-playbook \      │
+│    -i inventory.yml \    │
+│    install.yml           │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Capture Output          │
+│  • Success/Failure       │
+│  • Logs                  │
+└──────────────────────────┘
+----
+
+=== Phase 8: Verification
+
+[source]
+----
+For Each Target Node:
+
+┌──────────────────────────┐
+│  Wait for Services       │
+│  (60s delay)             │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Health Check            │
+│                          │
+│  curl -k https://<fqdn>  │
+│                          │
+│  Expected: HTTP 200      │
+└─────────────┬────────────┘
+              │
+              ▼
+┌──────────────────────────┐
+│  Report Results          │
+│  • Success count         │
+│  • Failed nodes          │
+│  • Detailed logs         │
+└──────────────────────────┘
+----
+
+== Configuration File Format
+
+=== .machines.pairs.csv
+
+New configuration format defining control-target pairs:
+
+[source,csv]
+----
+controlPrefix,controlSlesVersion,controlSpVersion,targetPrefix,targetSlesVersion,targetSpVersion
+sles-ctrl,15,4,sles-tgt,15,4
+sles-ctrl,15,5,sles-tgt,15,5
+sles-ctrl,15,6,sles-tgt,15,6
+sles-ctrl,15,7,sles-tgt,15,7
+sles-ctrl,15,6,sles-tgt,16,0
+----
+
+*Generated VM FQDNs:*
+
+* Control: `<controlPrefix><controlSlesVersion>sp<controlSpVersion>-ctrl.<region>.cloudapp.azure.com`
+* Target: `<targetPrefix><targetSlesVersion>sp<targetSpVersion>-tgt.<region>.cloudapp.azure.com`
+
+*Example:*
+
+* Control: `sles-ctrl15sp6-ctrl.westeurope.cloudapp.azure.com`
+* Target: `sles-tgt16sp0-tgt.westeurope.cloudapp.azure.com`
+
+== Feasibility Analysis
+
+=== Technical Feasibility: ✅ HIGH
+
+[cols="1,2,1"]
+|===
+|Component |Feasibility |Notes
+
+|VM Provisioning
+|✅ Fully Feasible
+|Existing Terraform can be adapted
+
+|Control Node Setup
+|✅ Fully Feasible
+|Simplified version of current setup
+
+|Target Node Setup
+|✅ Fully Feasible
+|Already implemented
+
+|Certificate Management
+|✅ Fully Feasible
+|SCP transfer straightforward
+
+|Inventory Generation
+|✅ Fully Feasible
+|Template-based generation
+
+|Remote Ansible Execution
+|✅ Fully Feasible
+|SSH-based execution well supported
+
+|Verification
+|✅ Fully Feasible
+|Simple HTTP health checks
+|===
+
+=== Complexity Assessment
+
+[cols="1,1,2"]
+|===
+|Aspect |Complexity |Mitigation
+
+|Pairing Logic
+|Medium
+|CSV parsing + validation scripts
+
+|State Management
+|Medium
+|Terraform handles VM state; workflow tracks pairs
+
+|Error Handling
+|Medium
+|Retry logic + detailed logging per pair
+
+|Parallel Execution
+|Low-Medium
+|Workflow can run pairs sequentially or parallel
+
+|SLES 16 Special Case
+|Low
+|Hardcoded mapping in configuration
+|===
+
+=== Advantages Over Current Approach
+
+. *Real-world Testing*: Mimics actual production deployments where Ansible runs from control nodes
+. *OS Compatibility Testing*: Validates Ansible compatibility across OS versions
+. *Isolation*: Each pair is independent; failures don't cascade
+. *Scalability*: Easy to add new OS version pairs
+. *Automation*: Fully automated end-to-end testing
+. *Cost Effective*: Control nodes can be smaller VMs (no Trento services running)
+
+=== Potential Challenges
+
+. *Increased VM Count*: Double the number of VMs (cost consideration)
+. *Network Configuration*: Control nodes need SSH access to targets
+. *Debugging*: More complex to troubleshoot (multi-hop: workflow → control → target)
+. *Timing*: Sequential execution may take longer
+. *Cleanup*: Need to clean up both control and target nodes
+
+== Implementation Recommendations
+
+=== Platform: Azure Pipelines ⭐
+
+*Reasons:*
+
+. *Native Azure Authentication*: Service Principal or Managed Identity eliminates credential management
+. *Azure-Native Tasks*: Built-in tasks for Blob Storage, VM management, Resource Groups
+. *Network Access*: Pipeline agents can be hosted in Azure, simplifying network security
+. *Cost Effective*: Free tier for public repositories with generous build minutes
+
+=== Authentication Strategy
+
+==== Azure Pipelines Authentication
+
+. *Service Principal* (Recommended):
++
+[source,yaml]
+----
+trigger:
+  - main
+
+variables:
+  azureSubscription: 'trento-testing-sp'  # Pre-configured service connection
+
+jobs:
+  - job: ProvisionAndTest
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+      - task: AzureCLI@2
+        inputs:
+          azureSubscription: $(azureSubscription)
+          scriptType: 'bash'
+          scriptLocation: 'inlineScript'
+          inlineScript: |
+            # Authenticated automatically
+            az vm list -g $(AZURE_RESOURCE_GROUP)
+            az storage blob list --account-name $(AZURE_BLOB_STORAGE)
+----
+
+. *Setup Steps*:
++
+[source,bash]
+----
+# One-time setup
+az ad sp create-for-rbac \
+  --name "trento-testing-pipeline" \
+  --role Contributor \
+  --scopes /subscriptions/<subscription-id>/resourceGroups/<rg-name>
+
+# Add service connection in Azure DevOps
+# Project Settings → Service connections → New → Azure Resource Manager
+----
+
+=== Recommended Workflow Structure
+
+==== Directory Structure
+
+[source]
+----
+trento-installation-automation/
+├── .azure-pipelines/
+│   └── control-target-testing.yml          # Main pipeline
+├── scripts/
+│   ├── setup-control-node.sh               # New
+│   ├── setup-target-node.sh                # Adapted from current
+│   ├── generate-pair-inventories.sh        # New
+│   ├── execute-ansible-from-control.sh     # New
+│   ├── verify-installations.sh             # New
+│   └── cleanup-pairs.sh                    # New
+├── terraform/
+│   ├── control-target-pairs.tf             # New
+│   └── variables.tf                        # Extended
+├── .machines.pairs.csv                      # New config format
+└── docs/
+    └── control-target-architecture.adoc     # This document
+----
+
+==== Pipeline Stages
+
+[source,yaml]
+----
+stages:
+  - stage: Provision
+    jobs:
+      - job: TerraformApply
+        steps:
+          - script: ./scripts/run-terraform-pairs.sh
+
+  - stage: SetupControl
+    jobs:
+      - job: SetupControlNodes
+        steps:
+          - script: ./scripts/setup-control-nodes.sh  # Parallel
+
+  - stage: SetupTarget
+    jobs:
+      - job: SetupTargetNodes
+        steps:
+          - script: ./scripts/setup-target-nodes.sh  # Parallel
+
+  - stage: ConfigureAccess
+    jobs:
+      - job: CertsAndInventories
+        steps:
+          - script: ./scripts/generate-pair-inventories.sh
+          - script: ./scripts/transfer-to-control.sh
+
+  - stage: ExecuteAnsible
+    jobs:
+      - job: RunAnsibleFromControl
+        steps:
+          - script: ./scripts/execute-ansible-from-control.sh  # Parallel per pair
+
+  - stage: Verify
+    jobs:
+      - job: HealthChecks
+        steps:
+          - script: ./scripts/verify-installations.sh
+
+  - stage: Cleanup
+    condition: always()
+    jobs:
+      - job: DestroyInfrastructure
+        steps:
+          - script: ./scripts/cleanup-pairs.sh
+----
+
+=== Cost Optimization
+
+. *VM Sizing*:
+   * Control Nodes: `Standard_B2s` (2 vCPU, 4GB RAM) - ~$30/month
+   * Target Nodes: `Standard_B2ms` (2 vCPU, 8GB RAM) - ~$60/month
+   * Test duration: 30-45 minutes per run
+   * *Cost per run*: ~$2-3 USD (spot pricing could reduce this)
+
+. *Parallel vs Sequential*:
+   * *Sequential*: Longer runtime (~90 min), lower peak cost
+   * *Parallel*: Faster runtime (~45 min), higher peak cost but same total
+   * *Recommendation*: Sequential for nightly tests, parallel for on-demand
+
+. *Cleanup Strategy*:
+   * Always destroy VMs after tests (even on failure)
+   * Keep Storage Account and Blob Container (minimal cost)
+   * Use Azure DevOps scheduled triggers for off-peak testing
+
+== Implementation Roadmap
+
+=== Phase 1: Infrastructure (2-3 days)
+
+. [ ] Create `control-target-pairs.tf` Terraform module
+. [ ] Adapt existing Terraform to support dual node types
+. [ ] Create `.machines.pairs.csv` parser script
+. [ ] Test VM provisioning with 1 pair
+
+=== Phase 2: Node Setup (2-3 days)
+
+. [ ] Create `setup-control-node.sh` (adapted from current, remove web/wanda)
+. [ ] Adapt `setup-target-node.sh` (use existing, skip Ansible execution)
+. [ ] Test control node can install `trento-ansible` package
+. [ ] Test target node is ready for Ansible
+
+=== Phase 3: Configuration Transfer (1-2 days)
+
+. [ ] Adapt certificate generation for pairs
+. [ ] Create inventory generation script for pairs
+. [ ] Implement SCP transfer to control nodes
+. [ ] Test SSH connectivity from control to target
+
+=== Phase 4: Ansible Execution (1-2 days)
+
+. [ ] Create remote Ansible execution script
+. [ ] Implement log capture from control nodes
+. [ ] Test Ansible playbook execution from control node
+. [ ] Validate installation on target node
+
+=== Phase 5: Verification & Cleanup (1 day)
+
+. [ ] Create health check script (curl to all targets)
+. [ ] Implement cleanup script for pairs
+. [ ] Add error handling and retries
+
+=== Phase 6: Pipeline Integration (2-3 days)
+
+. [ ] Create Azure Pipeline YAML (`control-target-testing.yml`)
+. [ ] Configure Service Principal authentication
+. [ ] Set up pipeline variables and secrets
+. [ ] Implement stage dependencies
+. [ ] Add failure notifications
+
+=== Phase 7: Testing & Documentation (2 days)
+
+. [ ] End-to-end testing with all pairs
+. [ ] Performance optimization (parallel execution)
+. [ ] Update README with new workflow
+. [ ] Create troubleshooting guide
+
+*Total Estimated Effort*: 11-16 days
+
+== Security Considerations
+
+. *SSH Key Management*:
+   * Generate ephemeral SSH key pairs per pipeline run
+   * Store in pipeline variables (not in code)
+   * Destroy after cleanup
+
+. *Secrets*:
+   * SUSE registration code: Azure Key Vault or Pipeline Library
+   * Blob Storage SAS token: Short-lived, read-only
+   * PostgreSQL passwords: Generated per run
+
+. *Network Security*:
+   * Control nodes need SSH (22) access to targets only
+   * Targets expose HTTPS (443) for verification only
+   * No public SSH access to targets (only from control)
+
+. *Service Principal Permissions*:
+   * Scope to specific resource group only
+   * Role: Contributor (or custom role with limited permissions)
+   * Enable audit logging
+
+== Monitoring & Observability
+
+. *Pipeline Logs*:
+   * Stage-level logs (Terraform, Setup, Ansible)
+   * Per-node logs (control and target)
+   * Failed task artifacts
+
+. *Azure Metrics*:
+   * VM creation/deletion success rate
+   * Network connectivity checks
+   * Disk space usage
+
+. *Application Health*:
+   * HTTP response codes from targets
+   * Ansible playbook success/failure
+   * Time-to-healthy metrics
+
+. *Alerts*:
+   * Pipeline failure notifications (email, Slack)
+   * Cost threshold warnings
+   * Failed cleanup alerts (orphaned resources)
+
+== Comparison: Current vs New Architecture
+
+[cols="1,2,2"]
+|===
+|Aspect |Current Architecture |New Architecture
+
+|*Ansible Execution*
+|From CI runner or local machine
+|From dedicated control nodes (SLES VMs)
+
+|*Realism*
+|Less representative of production
+|Mirrors production deployment patterns
+
+|*OS Testing*
+|Limited by runner OS
+|Full SLES version matrix testing
+
+|*Complexity*
+|Simple (single node type)
+|Higher (paired nodes, state management)
+
+|*Cost*
+|Lower (fewer VMs)
+|Higher (2x VMs per test)
+
+|*Debugging*
+|Easier (direct access)
+|More complex (multi-hop)
+
+|*Parallelization*
+|Harder (shared Ansible state)
+|Easier (isolated pairs)
+
+|*SLES 16 Support*
+|Limited
+|Full support (via SLES 15 SP6 control)
+
+|*Failure Isolation*
+|One failure affects run
+|Failures isolated per pair
+|===
+
+== Conclusion
+
+This new control-target architecture provides:
+
+✅ *Higher Fidelity Testing*: Matches production deployment patterns
+
+✅ *Better OS Coverage*: Tests Ansible compatibility across versions
+
+✅ *SLES 16 Support*: Works around Ansible limitations
+
+✅ *Scalability*: Easy to add new version combinations
+
+⚠️ *Trade-offs*: Higher complexity and cost, but manageable
+
+*Recommended Implementation*:
+
+* Use *Azure Pipelines* for native Azure integration
+* Implement *sequentially* (one pair at a time initially)
+* Optimize for *cost* (destroy VMs immediately after tests)
+* Monitor *closely* in first weeks to tune timing and resources
+
+This architecture is *feasible* and provides significant value for comprehensive Trento testing. The estimated 11-16 days of development effort is justified by the improved test coverage and production-readiness validation.
