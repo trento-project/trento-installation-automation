@@ -9,8 +9,8 @@
 # For each host, checks:
 #   - https://<host>/api/readyz (Trento web ready)
 #   - https://<host>/api/healthz (Trento web health)
-#   - http://localhost:4001/api/readyz (Trento wanda ready)
-#   - http://localhost:4001/api/healthz (Trento wanda health)
+#   - https://<host>/wanda/api/readyz (Trento wanda ready)
+#   - https://<host>/wanda/api/healthz (Trento wanda health)
 #
 # Inputs:
 #   - .env: Environment configuration file
@@ -40,7 +40,7 @@ source "$ENV_FILE"
 set +a
 
 # --- VALIDATE REQUIRED VARIABLES ---
-REQUIRED_VARS=(AZURE_VMS_LOCATION SSH_USER SSH_PRIVATE_KEY_PATH)
+REQUIRED_VARS=(AZURE_VMS_LOCATION)
 for var in "${REQUIRED_VARS[@]}"; do
     if [ -z "${!var}" ]; then
         echo "❌ Error: $var is not set in .env" >&2
@@ -86,14 +86,14 @@ if [ ${#VMS_ALL[@]} -eq 0 ]; then
     exit 1
 fi
 
-# --- READINESS CHECK FUNCTION (EXTERNAL) ---
-check_endpoint_external() {
+# --- READINESS CHECK FUNCTION ---
+check_endpoint() {
     local host="$1"
     local path="$2"
     local service_name="$3"
 
     local url="https://${host}${path}"
-    echo "  🔍 Checking $service_name (external): $url"
+    echo "  🔍 Checking $service_name: $url"
 
     # Get both the response body and HTTP status code
     local response
@@ -112,41 +112,9 @@ check_endpoint_external() {
         return 1
     fi
 
-    # Check if the HTTP code is 2xx (successful)
-    if [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
-        echo "    ✅ $service_name [HTTP $http_code]: $body"
-        return 0
-    else
-        echo "    ❌ $service_name [HTTP $http_code]: $body"
-        return 1
-    fi
-}
-
-# --- READINESS CHECK FUNCTION (INTERNAL VIA SSH) ---
-check_endpoint_internal() {
-    local host="$1"
-    local port="$2"
-    local path="$3"
-    local service_name="$4"
-
-    local url="http://localhost:${port}${path}"
-    echo "  🔍 Checking $service_name (internal): $url"
-
-    # Get both the response body and HTTP status code via SSH
-    local response
-    local http_code
-    local body
-
-    response=$(ssh -i "${SSH_PRIVATE_KEY_PATH}" -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o BatchMode=yes "${SSH_USER}@${host}" \
-        "curl -s -S -w '\n%{http_code}' --max-time 10 $url 2>/dev/null || printf '\n000'" 2>/dev/null || printf "\n000")
-
-    # Extract the last line as HTTP code and everything before as body
-    http_code=$(echo "$response" | tail -n 1)
-    body=$(echo "$response" | head -n -1)
-
-    # Check if http_code is actually a number
-    if ! [[ "$http_code" =~ ^[0-9]+$ ]]; then
-        echo "    ❌ $service_name - SSH connection failed or invalid response"
+    # Check for connection failure
+    if [[ "$http_code" == "000" ]]; then
+        echo "    ❌ $service_name - Connection failed"
         return 1
     fi
 
@@ -159,6 +127,7 @@ check_endpoint_internal() {
         return 1
     fi
 }
+
 
 # --- VERIFY ALL HOSTS ---
 echo ""
@@ -178,30 +147,30 @@ for vm_name in "${VMS_ALL[@]}"; do
 
     HOST_FAILED=false
 
-    # Check Trento Web readyz (external)
+    # Check Trento Web readyz
     TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
-    if ! check_endpoint_external "$fqdn" "/api/readyz" "Trento Web /readyz"; then
+    if ! check_endpoint "$fqdn" "/api/readyz" "Trento Web /readyz"; then
         FAILED_CHECKS=$((FAILED_CHECKS + 1))
         HOST_FAILED=true
     fi
 
-    # Check Trento Web healthz (external)
+    # Check Trento Web healthz
     TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
-    if ! check_endpoint_external "$fqdn" "/api/healthz" "Trento Web /healthz"; then
+    if ! check_endpoint "$fqdn" "/api/healthz" "Trento Web /healthz"; then
         FAILED_CHECKS=$((FAILED_CHECKS + 1))
         HOST_FAILED=true
     fi
 
-    # Check Trento Wanda readyz (internal via SSH on port 4001)
+    # Check Trento Wanda readyz
     TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
-    if ! check_endpoint_internal "$fqdn" "4001" "/api/readyz" "Trento Wanda /readyz"; then
+    if ! check_endpoint "$fqdn" "/wanda/api/readyz" "Trento Wanda /readyz"; then
         FAILED_CHECKS=$((FAILED_CHECKS + 1))
         HOST_FAILED=true
     fi
 
-    # Check Trento Wanda healthz (internal via SSH on port 4001)
+    # Check Trento Wanda healthz
     TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
-    if ! check_endpoint_internal "$fqdn" "4001" "/api/healthz" "Trento Wanda /healthz"; then
+    if ! check_endpoint "$fqdn" "/wanda/api/healthz" "Trento Wanda /healthz"; then
         FAILED_CHECKS=$((FAILED_CHECKS + 1))
         HOST_FAILED=true
     fi
