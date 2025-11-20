@@ -48,4 +48,8 @@ echo -e "${BOLD_GREEN}### Run Ansible Playbooks ###${RESET}"
 ./scripts/run-ansible-playbooks.sh
 echo
 
+echo -e "${BOLD_GREEN}### Verify Hosts Readiness ###${RESET}"
+./scripts/verify-hosts-readiness.sh
+echo
+
 echo -e "${BOLD_GREEN}✅ Pipeline completed successfully!${RESET}"
