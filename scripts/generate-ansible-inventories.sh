@@ -98,7 +98,6 @@ all:
         wanda_postgres_password: "postgres"
         rabbitmq_password: "guest"
         web_admin_password: "adminpassword"
-        wanda_listen_port: 4001
         trento_server_name: "{{ inventory_hostname }}"
         nginx_vhost_filename: "{{ inventory_hostname }}"
         nginx_ssl_cert: "{{ lookup('file', '${ANSIBLE_VM_CERTS_PATH}/' + inventory_hostname + '.crt') }}"

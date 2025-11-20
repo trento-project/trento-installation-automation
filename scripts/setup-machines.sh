@@ -136,11 +136,18 @@ fi
 if [[ "\$HOSTNAME" == *rpm* ]]; then
     echo "📦 Setting up custom RPM repository..."
 
+    # Extract SLES version from SP_VERSION (already detected above)
+    SLES_MAJOR_VERSION="15"
+
     SAS_QUERY_STRING="$AZURE_BLOB_STORAGE_SAS_TOKEN"
     URL_BASE='https://$AZURE_BLOB_STORAGE.blob.core.windows.net/$AZURE_BLOB_STORAGE_CONTAINER'
     DEST_PATH='/var/cache/zypper/custom_repo'
     REPO_NAME='custom_rpms'
-    URL_ORIGIN="\$URL_BASE?\$SAS_QUERY_STRING"
+
+    # Build version-specific path: 15/3/*.rpm, 15/4/*.rpm, etc.
+    URL_ORIGIN="\$URL_BASE/\$SLES_MAJOR_VERSION/\$SP_VERSION/?\$SAS_QUERY_STRING"
+
+    echo "📍 Using version-specific repository path: \$SLES_MAJOR_VERSION/\$SP_VERSION/"
 
     sudo zypper --non-interactive --gpg-auto-import-keys addrepo https://packages.microsoft.com/sles/15/prod/ microsoft-prod
     sudo zypper --non-interactive --gpg-auto-import-keys refresh
