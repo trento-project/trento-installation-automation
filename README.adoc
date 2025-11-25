@@ -61,9 +61,10 @@ This is useful for testing Helm-based Trento installations where manual Kubernet
 * **Ansible** (installed automatically in `.venv-ansible/`)
 * **Trento Ansible project** - https://github.com/trento-project/ansible (cloned locally)
 * Azure CLI (`az`) authenticated
-* SSH key pair for VM access
 * SUSE registration credentials (email and registration code)
 * Bash 4.0+
+
+NOTE: SSH keys are generated automatically during Terraform provisioning. You no longer need to provide your own SSH key paths.
 
 [WARNING]
 ====
@@ -111,6 +112,20 @@ sles,16,0,rpm
 
 == Configuration
 
+=== Azure Pipeline Variables
+
+If you're using Azure Pipelines (`azure-pipelines.yml`), configure these pipeline variables:
+
+**Required Variables:**
+
+* `AZURE_SERVICE_CONNECTION` - Azure Resource Manager service connection name
+* `AZURE_RESOURCE_GROUP` - Azure resource group name
+* `AZURE_OWNER_TAG` - Owner tag for Azure resources
+* `AZURE_VMS_LOCATION` - Azure region (e.g., `westeurope`)
+* `SSH_USER` - SSH username for VMs (e.g., `azureadm`)
+
+**Note:** SSH keys are generated automatically by Terraform, so you don't need to provide `SSH_PUBLIC_KEY_CONTENT` or `SSH_PRIVATE_KEY_PATH` in the pipeline variables.
+
 === Environment Variables (.env)
 
 Create a `.env` file in the project root:
@@ -134,8 +149,6 @@ ANSIBLE_PYTHON_EXEC="/usr/bin/python3"
 ANSIBLE_VM_CERTS_PATH="/path/to/certs"
 
 # SSH Configuration
-SSH_PRIVATE_KEY_PATH="/path/to/private/key"
-SSH_PUBLIC_KEY_CONTENT="ssh-ed25519 AAAA..."
 SSH_USER="azureadm"
 
 # SUSE Registration
@@ -169,6 +182,32 @@ The suffix field only accepts `rpm` or `helm`. Any other value will cause the sc
 ====
 
 FQDN format: `<prefix><slesVersion>sp<spVersion><suffix>.<AZURE_VMS_LOCATION>.cloudapp.azure.com`
+
+=== SSH Key Management
+
+SSH keys are automatically generated during Terraform provisioning:
+
+* Terraform creates an ephemeral ED25519 SSH key pair
+* The private key is saved to `.ssh-key-temp` (file permission: 0600)
+* The public key is automatically configured on all VMs
+* Scripts retrieve the key path from Terraform outputs
+* Keys are excluded from git via `.gitignore`
+
+**Benefits:**
+
+* No need to manage SSH keys manually
+* No risk of committing private keys to version control
+* Each deployment gets fresh keys
+* Keys can be safely deleted after testing
+
+**Cleanup:**
+
+To remove the generated SSH key after infrastructure cleanup:
+
+[source,bash]
+----
+rm -f .ssh-key-temp
+----
 
 == Pipeline Stages
 
@@ -232,7 +271,7 @@ To clean up local generated files without destroying Azure infrastructure:
 
 [source,bash]
 ----
-rm -rf certs .venv-ansible inventories logs
+rm -rf certs .venv-ansible inventories logs .ssh-key-temp
 ----
 
 == Logs

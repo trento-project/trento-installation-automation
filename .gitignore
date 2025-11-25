@@ -6,10 +6,12 @@
 /inventories
 /logs
 
-# Environment and configuration
+# Environment
 .env
-*.conf
-.machines.conf.csv
+
+# Generated SSH keys (ephemeral)
+.ssh-key-temp
+.ssh-key-temp.pub
 
 # Terraform state files
 /terraform/*.tfstate

@@ -1,0 +1,129 @@
+name: Cleanup Azure Infrastructure
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+env:
+  LOGS_DIR: './logs'
+
+jobs:
+  cleanup:
+    name: 'Cleanup VMs and Dependencies'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup Azure Credentials
+        uses: ./.github/actions/setup-azure-credentials
+        with:
+          azure-credentials: ${{ secrets.AZURE_CREDENTIALS }}
+          resource-group-fallback: ${{ secrets.AZURE_RESOURCE_GROUP }}
+
+      - name: Verify Resource Group Existence
+        run: |
+          echo "Verifying resource group existence..."
+          if ! az group show --name "$AZURE_RESOURCE_GROUP" --output none; then
+            echo "❌ Error: Resource group '$AZURE_RESOURCE_GROUP' does not exist or access denied"
+            exit 1
+          fi
+          echo "✅ Resource group '$AZURE_RESOURCE_GROUP' verified"
+
+      - name: Cleanup VMs and Dependencies
+        run: |
+          set -euo pipefail
+
+          RESOURCE_GROUP_NAME="$AZURE_RESOURCE_GROUP"
+          MAX_DELETION_PASSES=3
+          CURRENT_PASS=0
+
+          echo "🗑️  Starting cleanup for resource group: $RESOURCE_GROUP_NAME"
+          echo "⚠️  Resources to be deleted: VMs, NICs, Disks, Public IPs"
+          echo "✅ Resources preserved: Storage Accounts, Container Registries"
+          echo ""
+
+          while [ $CURRENT_PASS -lt $MAX_DELETION_PASSES ]; do
+            CURRENT_PASS=$((CURRENT_PASS + 1))
+            echo ""
+            echo "--- Deletion Pass $CURRENT_PASS/$MAX_DELETION_PASSES ---"
+
+            # Delete all VMs first (only in the first pass)
+            if [ $CURRENT_PASS -eq 1 ]; then
+              ALL_VMS_IN_RG=$(az vm list --resource-group "$RESOURCE_GROUP_NAME" --query "[].name" -o tsv)
+              if [ -n "$ALL_VMS_IN_RG" ]; then
+                echo "Deleting Virtual Machines..."
+                for VM_NAME_TO_DELETE in $ALL_VMS_IN_RG; do
+                  echo "  - Deleting VM '$VM_NAME_TO_DELETE'"
+                  az vm delete --resource-group "$RESOURCE_GROUP_NAME" --name "$VM_NAME_TO_DELETE" --yes --no-wait
+                done
+                echo "VM deletions initiated. Waiting 60 seconds..."
+                sleep 60
+              else
+                echo "No Virtual Machines found to delete"
+              fi
+            fi
+
+            # List remaining resources (EXCLUDING Storage Accounts and ACRs)
+            REMAINING_RESOURCE_IDS=$(az resource list \
+              --resource-group "$RESOURCE_GROUP_NAME" \
+              --query "[?type!=\`Microsoft.Storage/storageAccounts\` && type!=\`Microsoft.ContainerRegistry/registries\`].id" \
+              -o tsv)
+
+            if [ -z "$REMAINING_RESOURCE_IDS" ]; then
+              echo "No remaining non-excluded resources found in pass $CURRENT_PASS"
+              break
+            fi
+
+            # Count resources
+            RESOURCES_COUNT=$(echo "$REMAINING_RESOURCE_IDS" | wc -l | tr -d ' ')
+            echo "Pass $CURRENT_PASS - Found $RESOURCES_COUNT resources to clean (NICs, Disks, IPs, etc.)"
+
+            # Delete remaining resources
+            echo "Deleting remaining dependencies..."
+            if [ -n "$REMAINING_RESOURCE_IDS" ]; then
+              while IFS= read -r RESOURCE_ID; do
+                echo "  - Deleting resource: $RESOURCE_ID"
+                az resource delete --ids "$RESOURCE_ID" --no-wait || true
+              done <<< "$REMAINING_RESOURCE_IDS"
+            fi
+
+            echo "Deletions initiated. Waiting 5 seconds before next pass..."
+            sleep 5
+          done
+
+          echo ""
+          echo "---------------------- FINAL CLEANUP STATUS ----------------------"
+          FINAL_CLEANUP=$(az resource list --resource-group "$RESOURCE_GROUP_NAME" --query "[?type!=\`Microsoft.Storage/storageAccounts\` && type!=\`Microsoft.ContainerRegistry/registries\`].id" -o tsv)
+          if [ -z "$FINAL_CLEANUP" ]; then
+            echo "✅ VM and dependency cleanup complete"
+            exit 0
+          else
+            echo "⚠️  WARNING: Some resources could not be deleted"
+            echo "$FINAL_CLEANUP"
+            exit 1
+          fi
+
+      - name: Create Logs Directory
+        if: always()
+        run: mkdir -p ${{ env.LOGS_DIR }}
+
+      - name: Save Cleanup Summary
+        if: always()
+        run: |
+          echo "Cleanup workflow completed at $(date)" > ${{ env.LOGS_DIR }}/cleanup-summary.txt
+          echo "Resource Group: $AZURE_RESOURCE_GROUP" >> ${{ env.LOGS_DIR }}/cleanup-summary.txt
+          echo "Triggered by: ${{ github.actor }}" >> ${{ env.LOGS_DIR }}/cleanup-summary.txt
+
+      - name: Upload Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleanup-logs
+          path: ${{ env.LOGS_DIR }}
+          if-no-files-found: ignore

@@ -1,0 +1,70 @@
+name: Provision Azure Infrastructure
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
+
+env:
+  TERRAFORM_VERSION: '1.6.0'
+  WORKING_DIRECTORY: './terraform'
+
+jobs:
+  terraform:
+    name: 'Terraform Provision'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Verify Machine Configuration
+        run: |
+          if [ ! -f .machines.conf.csv ]; then
+            echo "❌ Error: .machines.conf.csv not found in repository"
+            exit 1
+          fi
+          echo "✅ Machine configuration found:"
+          cat .machines.conf.csv
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup Azure Credentials
+        uses: ./.github/actions/setup-azure-credentials
+        with:
+          azure-credentials: ${{ secrets.AZURE_CREDENTIALS }}
+          resource-group-fallback: ${{ secrets.AZURE_RESOURCE_GROUP }}
+
+      - name: Terraform Init
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        env:
+          TF_VAR_azure_owner_tag: ${{ secrets.AZURE_OWNER_TAG }}
+          TF_VAR_ssh_user: ${{ secrets.SSH_USER }}
+        run: terraform plan
+
+      - name: Terraform Apply
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        env:
+          TF_VAR_azure_owner_tag: ${{ secrets.AZURE_OWNER_TAG }}
+          TF_VAR_ssh_user: ${{ secrets.SSH_USER }}
+        run: terraform apply -auto-approve
+
+      - name: Upload Terraform Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-logs
+          path: ${{ env.WORKING_DIRECTORY }}/logs
+          if-no-files-found: ignore

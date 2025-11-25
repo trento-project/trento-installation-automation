@@ -1,0 +1,44 @@
+name: 'Extract Azure Configuration'
+description: 'Extracts Azure configuration from AZURE_CREDENTIALS JSON and sets environment variables'
+
+inputs:
+  azure-credentials:
+    description: 'Azure credentials JSON'
+    required: true
+  resource-group-fallback:
+    description: 'Fallback resource group if not in credentials JSON'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Extract Azure Configuration
+      shell: bash
+      run: |
+        # Extract values from AZURE_CREDENTIALS JSON
+        AZURE_CREDS='${{ inputs.azure-credentials }}'
+
+        SUBSCRIPTION_ID=$(echo "$AZURE_CREDS" | jq -r '.subscriptionId')
+        CLIENT_ID=$(echo "$AZURE_CREDS" | jq -r '.clientId')
+        CLIENT_SECRET=$(echo "$AZURE_CREDS" | jq -r '.clientSecret')
+        TENANT_ID=$(echo "$AZURE_CREDS" | jq -r '.tenantId')
+        RESOURCE_GROUP=$(echo "$AZURE_CREDS" | jq -r '.resourceGroup // empty')
+
+        # Set environment variables for Azure CLI and Terraform
+        echo "ARM_SUBSCRIPTION_ID=$SUBSCRIPTION_ID" >> $GITHUB_ENV
+        echo "ARM_CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
+        echo "ARM_CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
+        echo "ARM_TENANT_ID=$TENANT_ID" >> $GITHUB_ENV
+
+        # For resource group, fall back to fallback input if not in JSON
+        if [ -z "$RESOURCE_GROUP" ] && [ -n "${{ inputs.resource-group-fallback }}" ]; then
+          RESOURCE_GROUP="${{ inputs.resource-group-fallback }}"
+        fi
+
+        if [ -n "$RESOURCE_GROUP" ]; then
+          echo "AZURE_RESOURCE_GROUP=$RESOURCE_GROUP" >> $GITHUB_ENV
+          echo "TF_VAR_azure_resource_group=$RESOURCE_GROUP" >> $GITHUB_ENV
+        fi
+
+        echo "✅ Azure configuration extracted successfully"
