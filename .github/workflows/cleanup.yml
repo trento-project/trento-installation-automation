@@ -1,7 +1,9 @@
 name: Cleanup Azure Infrastructure
 
 on:
-  workflow_dispatch:  # Manual trigger only
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 env:
   LOGS_DIR: './logs'
