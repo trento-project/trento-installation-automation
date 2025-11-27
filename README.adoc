@@ -66,7 +66,7 @@ This is useful for testing Helm-based Trento installations where manual Kubernet
 
 NOTE: SSH keys are generated automatically at the start of each deployment. No manual SSH key setup is required.
 
-NOTE: The Azure region is hardcoded to `westeurope`. To use a different region, set `AZURE_VMS_LOCATION` in your `.env` file.
+NOTE: The Azure region is hardcoded to `westeurope`. As we don't plan to use any other region.
 
 [WARNING]
 ====
