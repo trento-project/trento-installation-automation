@@ -19,17 +19,18 @@ rm -rf certs
 rm -rf .venv-ansible
 rm -rf inventories
 rm -rf logs
+rm -rf .ssh-keys
 
 # Terminal formatting - using ANSI escape codes
 BOLD_GREEN="\033[1;32m"
 RESET="\033[0m"
 
-echo -e "${BOLD_GREEN}### Provision Azure Infrastructure with Terraform ###${RESET}"
-./scripts/run-terraform.sh
+echo -e "${BOLD_GREEN}### Setup SSH Keys ###${RESET}"
+./scripts/setup-ssh-keys.sh
 echo
 
-echo -e "${BOLD_GREEN}### Clear SSH Known Hosts ###${RESET}"
-./scripts/clear-known-hosts.sh
+echo -e "${BOLD_GREEN}### Provision Azure Infrastructure with Terraform ###${RESET}"
+./scripts/run-terraform.sh
 echo
 
 echo -e "${BOLD_GREEN}### Setting up Machines, SUSE Registration, custom rpm repo... ###${RESET}"

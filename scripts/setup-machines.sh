@@ -45,6 +45,8 @@ set -a
 source "$ENV_FILE"
 set +a
 
+# Default to westeurope if not set
+AZURE_VMS_LOCATION="${AZURE_VMS_LOCATION:-westeurope}"
 DOMAIN_SUFFIX="${AZURE_VMS_LOCATION}.cloudapp.azure.com"
 
 # --- VALIDATE MACHINES FILE ---
@@ -58,6 +60,18 @@ if [ -z "${SSH_USER:-}" ]; then
     echo "❌ Error: SSH_USER variable is not defined in .env" >&2
     exit 1
 fi
+
+# --- USE GENERATED SSH KEYS ---
+SSH_KEYS_DIR="$PROJECT_ROOT/.ssh-keys"
+SSH_PRIVATE_KEY_PATH="${SSH_PRIVATE_KEY_PATH:-$SSH_KEYS_DIR/id_ed25519}"
+
+if [ ! -f "$SSH_PRIVATE_KEY_PATH" ]; then
+    echo "❌ Error: SSH private key not found at $SSH_PRIVATE_KEY_PATH" >&2
+    echo "   Run ./scripts/setup-ssh-keys.sh first" >&2
+    exit 1
+fi
+
+echo "✅ Using SSH private key: $SSH_PRIVATE_KEY_PATH" >&2
 
 # --- SETUP LOGGING ---
 mkdir -p "$LOGS_DIR"
@@ -300,7 +314,7 @@ EOF_REMOTE
 # --- MAIN EXECUTION: PARALLEL VM INITIALIZATION ---
 echo "🚀 Setting up SUSE VMs..." >&2
 
-while IFS=, read -r prefix slesVersion spVersion suffix; do
+while IFS=, read -r prefix slesVersion spVersion suffix || [ -n "$prefix" ]; do
     # Skip header line
     if [[ "$prefix" == "prefix" ]]; then
         continue

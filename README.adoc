@@ -57,13 +57,16 @@ This is useful for testing Helm-based Trento installations where manual Kubernet
 * **SUSE Linux machine** (this project only runs on SUSE systems)
 * Azure subscription with existing resource group
 * **Terraform** (>= 1.0) installed and in PATH
-* **Python 3** with pip (for Ansible virtual environment)
+* **Python 3.11+** with pip (for Ansible virtual environment - required by ansible-core 2.16.*)
 * **Ansible** (installed automatically in `.venv-ansible/`)
 * **Trento Ansible project** - https://github.com/trento-project/ansible (cloned locally)
 * Azure CLI (`az`) authenticated
-* SSH key pair for VM access
 * SUSE registration credentials (email and registration code)
 * Bash 4.0+
+
+NOTE: SSH keys are generated automatically at the start of each deployment. No manual SSH key setup is required.
+
+NOTE: The Azure region is hardcoded to `westeurope`. To use a different region, set `AZURE_VMS_LOCATION` in your `.env` file.
 
 [WARNING]
 ====
@@ -120,7 +123,6 @@ Create a `.env` file in the project root:
 # Azure Configuration
 AZURE_RESOURCE_GROUP="your-resource-group-name"
 AZURE_OWNER_TAG="your-name"
-AZURE_VMS_LOCATION="westeurope"
 
 # Azure Blob Storage (for custom RPM artifacts)
 AZURE_BLOB_STORAGE="your-storage-account"
@@ -130,12 +132,9 @@ AZURE_BLOB_STORAGE_SAS_TOKEN="your-sas-token"
 # Ansible Configuration
 ANSIBLE_PROJECT_PATH="/path/to/your/ansible/project"
 ANSIBLE_INVENTORIES_PATH="/path/to/inventories"
-ANSIBLE_PYTHON_EXEC="/usr/bin/python3"
 ANSIBLE_VM_CERTS_PATH="/path/to/certs"
 
 # SSH Configuration
-SSH_PRIVATE_KEY_PATH="/path/to/private/key"
-SSH_PUBLIC_KEY_CONTENT="ssh-ed25519 AAAA..."
 SSH_USER="azureadm"
 
 # SUSE Registration
@@ -174,12 +173,13 @@ FQDN format: `<prefix><slesVersion>sp<spVersion><suffix>.<AZURE_VMS_LOCATION>.cl
 
 The automation runs these stages sequentially:
 
-. **Terraform Provisioning** - Creates Azure VMs based on CSV configuration
-. **SSH Known Hosts Cleanup** - Clears old SSH fingerprints
+. **SSH Key Setup** - Sets up fresh ephemeral SSH keys for the deployment
+. **Terraform Provisioning** - Creates Azure VMs using the generated SSH keys
 . **Machine Setup** - Registers SUSE systems and configures repositories (parallel execution)
 . **SSL Certificate Generation** - Creates self-signed certificates for each VM
 . **Ansible Inventory Generation** - Creates inventory files for Ansible
 . **Ansible Playbook Execution** - Installs Trento via Ansible
+. **Host Verification** - Verifies Trento services are ready (with retries)
 
 == Usage
 
@@ -194,6 +194,9 @@ The automation runs these stages sequentially:
 
 [source,bash]
 ----
+# Setup SSH keys
+./scripts/setup-ssh-keys.sh
+
 # Provision infrastructure
 ./scripts/run-terraform.sh
 
@@ -208,6 +211,9 @@ The automation runs these stages sequentially:
 
 # Run Ansible playbooks
 ./scripts/run-ansible-playbooks.sh
+
+# Verify hosts readiness
+./scripts/verify-hosts-readiness.sh
 ----
 
 === Cleanup Infrastructure
@@ -232,8 +238,10 @@ To clean up local generated files without destroying Azure infrastructure:
 
 [source,bash]
 ----
-rm -rf certs .venv-ansible inventories logs
+rm -rf certs .venv-ansible inventories logs .ssh-keys
 ----
+
+NOTE: The `.ssh-keys/` directory contains automatically generated SSH keys used for VM access. These keys are specific to each deployment and can be safely removed after cleanup.
 
 == Logs
 
