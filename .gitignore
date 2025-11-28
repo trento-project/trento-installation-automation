@@ -5,6 +5,7 @@
 /certs
 /inventories
 /logs
+/.ssh-keys
 
 # Environment and configuration
 .env

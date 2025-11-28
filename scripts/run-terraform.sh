@@ -38,6 +38,21 @@ mkdir -p "$LOGS_DIR"
 echo "⚙️  Starting Terraform execution..." >&2
 echo "--- $(date) ---" >> "$LOG_FILE"
 
+# --- LOAD SSH KEYS ---
+SSH_KEYS_DIR="$PROJECT_ROOT/.ssh-keys"
+SSH_PRIVATE_KEY_PATH="$SSH_KEYS_DIR/id_ed25519"
+SSH_PUBLIC_KEY_PATH="$SSH_KEYS_DIR/id_ed25519.pub"
+
+if [ ! -f "$SSH_PUBLIC_KEY_PATH" ]; then
+    echo "❌ Error: SSH public key not found at $SSH_PUBLIC_KEY_PATH" >&2
+    echo "   Run ./scripts/setup-ssh-keys.sh first" >&2
+    exit 1
+fi
+
+export SSH_PRIVATE_KEY_PATH
+export SSH_PUBLIC_KEY_CONTENT="$(cat "$SSH_PUBLIC_KEY_PATH")"
+echo "✅ Using SSH keys from $SSH_KEYS_DIR" >&2
+
 # --- LOAD ENVIRONMENT VARIABLES ---
 echo "📦 Loading environment variables from $ENV_FILE..." >> "$LOG_FILE"
 
@@ -63,6 +78,11 @@ if [ -z "$ARM_SUBSCRIPTION_ID" ]; then
 fi
 export ARM_SUBSCRIPTION_ID
 echo "✅ ARM_SUBSCRIPTION_ID set to: $ARM_SUBSCRIPTION_ID" >> "$LOG_FILE"
+
+# --- EXPORT SSH KEYS AS TERRAFORM VARIABLES ---
+export TF_VAR_ssh_private_key_path="$SSH_PRIVATE_KEY_PATH"
+export TF_VAR_ssh_public_key_content="$SSH_PUBLIC_KEY_CONTENT"
+echo "✅ SSH keys exported as Terraform variables" >> "$LOG_FILE"
 
 # --- TERRAFORM EXECUTION ---
 # Execute Terraform in a sub-shell to redirect all output and capture exit code

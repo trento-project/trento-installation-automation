@@ -39,14 +39,9 @@ set -a
 source "$ENV_FILE"
 set +a
 
-# --- VALIDATE REQUIRED VARIABLES ---
-REQUIRED_VARS=(AZURE_VMS_LOCATION)
-for var in "${REQUIRED_VARS[@]}"; do
-    if [ -z "${!var}" ]; then
-        echo "❌ Error: $var is not set in .env" >&2
-        exit 1
-    fi
-done
+# --- DEFAULT CONFIGURATION ---
+# Default to westeurope if not set
+AZURE_VMS_LOCATION="${AZURE_VMS_LOCATION:-westeurope}"
 
 # --- VALIDATE MACHINES FILE ---
 if [ ! -f "$MACHINES_FILE" ]; then
@@ -59,7 +54,7 @@ declare -a VMS_ALL=()
 
 echo "⏳ Reading VM definitions from CSV..." >&2
 
-while IFS=',' read -r prefix slesVersion spVersion suffix; do
+while IFS=',' read -r prefix slesVersion spVersion suffix || [ -n "$prefix" ]; do
     # Skip header line
     if [[ "$prefix" == "prefix" ]]; then
         continue
@@ -86,7 +81,11 @@ if [ ${#VMS_ALL[@]} -eq 0 ]; then
     exit 1
 fi
 
-# --- READINESS CHECK FUNCTION ---
+# --- CONFIGURATION ---
+MAX_RETRIES=5
+INITIAL_WAIT=10
+
+# --- READINESS CHECK FUNCTION WITH RETRY ---
 check_endpoint() {
     local host="$1"
     local path="$2"
@@ -95,37 +94,72 @@ check_endpoint() {
     local url="https://${host}${path}"
     echo "  🔍 Checking $service_name: $url"
 
-    # Get both the response body and HTTP status code
-    local response
-    local http_code
-    local body
+    local retry=0
+    local wait_time=$INITIAL_WAIT
 
-    response=$(curl -k -s -S -w '\n%{http_code}' --max-time 10 --connect-timeout 5 "$url" 2>/dev/null || printf "\n000")
+    while [ $retry -lt $MAX_RETRIES ]; do
+        # Get both the response body and HTTP status code
+        local response
+        local http_code
+        local body
 
-    # Extract the last line as HTTP code and everything before as body
-    http_code=$(echo "$response" | tail -n 1)
-    body=$(echo "$response" | head -n -1)
+        response=$(curl -k -s -S -w '\n%{http_code}' --max-time 10 --connect-timeout 5 "$url" 2>/dev/null || printf "\n000")
 
-    # Check if http_code is actually a number
-    if ! [[ "$http_code" =~ ^[0-9]+$ ]]; then
-        echo "    ❌ $service_name - Connection failed or invalid response"
-        return 1
-    fi
+        # Extract the last line as HTTP code and everything before as body
+        http_code=$(echo "$response" | tail -n 1)
+        body=$(echo "$response" | head -n -1)
 
-    # Check for connection failure
-    if [[ "$http_code" == "000" ]]; then
-        echo "    ❌ $service_name - Connection failed"
-        return 1
-    fi
+        # Check if http_code is actually a number
+        if ! [[ "$http_code" =~ ^[0-9]+$ ]]; then
+            retry=$((retry + 1))
+            if [ $retry -lt $MAX_RETRIES ]; then
+                echo "    ⏳ $service_name - Invalid response (attempt $retry/$MAX_RETRIES), retrying in ${wait_time}s..."
+                sleep $wait_time
+                wait_time=$((wait_time * 2))
+                continue
+            else
+                echo "    ❌ $service_name - Connection failed after $MAX_RETRIES attempts"
+                return 1
+            fi
+        fi
 
-    # Check if the HTTP code is 2xx (successful)
-    if [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
-        echo "    ✅ $service_name [HTTP $http_code]: $body"
-        return 0
-    else
-        echo "    ❌ $service_name [HTTP $http_code]: $body"
-        return 1
-    fi
+        # Check for connection failure
+        if [[ "$http_code" == "000" ]]; then
+            retry=$((retry + 1))
+            if [ $retry -lt $MAX_RETRIES ]; then
+                echo "    ⏳ $service_name - Connection failed (attempt $retry/$MAX_RETRIES), retrying in ${wait_time}s..."
+                sleep $wait_time
+                wait_time=$((wait_time * 2))
+                continue
+            else
+                echo "    ❌ $service_name - Connection failed after $MAX_RETRIES attempts"
+                return 1
+            fi
+        fi
+
+        # Check if the HTTP code is 2xx (successful)
+        if [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+            if [ $retry -gt 0 ]; then
+                echo "    ✅ $service_name [HTTP $http_code]: $body (succeeded after $((retry + 1)) attempts)"
+            else
+                echo "    ✅ $service_name [HTTP $http_code]: $body"
+            fi
+            return 0
+        else
+            retry=$((retry + 1))
+            if [ $retry -lt $MAX_RETRIES ]; then
+                echo "    ⏳ $service_name [HTTP $http_code] - Service not ready (attempt $retry/$MAX_RETRIES), retrying in ${wait_time}s..."
+                sleep $wait_time
+                wait_time=$((wait_time * 2))
+                continue
+            else
+                echo "    ❌ $service_name [HTTP $http_code]: $body (failed after $MAX_RETRIES attempts)"
+                return 1
+            fi
+        fi
+    done
+
+    return 1
 }
 
 

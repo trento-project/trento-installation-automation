@@ -56,7 +56,8 @@ fi
 # --- CONFIGURATION ---
 ANSIBLE_REQUIREMENTS_PATH="${ANSIBLE_REQUIREMENTS_PATH:-$ANSIBLE_PROJECT_PATH}"
 REQUIREMENTS_FILE="$ANSIBLE_REQUIREMENTS_PATH/requirements.yml"
-ANSIBLE_PYTHON_EXEC="${ANSIBLE_PYTHON_EXEC:-python3}"
+# ansible-core 2.16.* requires Python 3.10+, we default to python3.11
+ANSIBLE_PYTHON_EXEC="${ANSIBLE_PYTHON_EXEC:-python3.11}"
 INVENTORY_FILE="$ANSIBLE_INVENTORIES_PATH/inventory.yml"
 VENV_NAME=".venv-ansible"
 ANSIBLE_CORE_VERSION="2.16.*"
@@ -116,6 +117,19 @@ if [ ! -f "$PLAYBOOK_FILE" ]; then
     echo "❌ Error: Playbook file not found at $PLAYBOOK_FILE" >&2
     exit 1
 fi
+
+# --- CONFIGURE SSH KEY FOR ANSIBLE ---
+SSH_KEYS_DIR="$PROJECT_ROOT/.ssh-keys"
+SSH_PRIVATE_KEY_PATH="${SSH_PRIVATE_KEY_PATH:-$SSH_KEYS_DIR/id_ed25519}"
+
+if [ ! -f "$SSH_PRIVATE_KEY_PATH" ]; then
+    echo "❌ Error: SSH private key not found at $SSH_PRIVATE_KEY_PATH" >&2
+    echo "   Run ./scripts/setup-ssh-keys.sh or ./scripts/run-terraform.sh first" >&2
+    exit 1
+fi
+
+export ANSIBLE_PRIVATE_KEY_FILE="$SSH_PRIVATE_KEY_PATH"
+echo "✅ Using SSH private key: $SSH_PRIVATE_KEY_PATH" >&2
 
 # --- EXECUTE ANSIBLE PLAYBOOK ---
 echo "" >&2

@@ -42,9 +42,13 @@ set -a
 source "$ENV_FILE"
 set +a
 
+# --- DEFAULT CONFIGURATION ---
+# Default to westeurope if not set
+AZURE_VMS_LOCATION="${AZURE_VMS_LOCATION:-westeurope}"
+
 # --- VALIDATE REQUIRED VARIABLES ---
-if [ -z "${AZURE_VMS_LOCATION:-}" ] || [ -z "${ANSIBLE_VM_CERTS_PATH:-}" ]; then
-    echo "❌ Error: AZURE_VMS_LOCATION or ANSIBLE_VM_CERTS_PATH not set in .env" >&2
+if [ -z "${ANSIBLE_VM_CERTS_PATH:-}" ]; then
+    echo "❌ Error: ANSIBLE_VM_CERTS_PATH not set in .env" >&2
     exit 1
 fi
 

@@ -34,8 +34,12 @@ set -a
 source "$ENV_FILE"
 set +a
 
+# --- DEFAULT CONFIGURATION ---
+# Default to westeurope if not set
+AZURE_VMS_LOCATION="${AZURE_VMS_LOCATION:-westeurope}"
+
 # --- VALIDATE REQUIRED VARIABLES ---
-REQUIRED_VARS=(ANSIBLE_VM_CERTS_PATH SSH_USER AZURE_VMS_LOCATION ANSIBLE_INVENTORIES_PATH)
+REQUIRED_VARS=(ANSIBLE_VM_CERTS_PATH SSH_USER ANSIBLE_INVENTORIES_PATH)
 for var in "${REQUIRED_VARS[@]}"; do
     if [ -z "${!var}" ]; then
         echo "❌ Error: $var is not set in .env" >&2
@@ -44,6 +48,11 @@ for var in "${REQUIRED_VARS[@]}"; do
 done
 
 INVENTORIES_PATH="$ANSIBLE_INVENTORIES_PATH"
+
+# --- CONVERT CERTS PATH TO ABSOLUTE ---
+if [[ ! "$ANSIBLE_VM_CERTS_PATH" = /* ]]; then
+    ANSIBLE_VM_CERTS_PATH="$PROJECT_ROOT/$ANSIBLE_VM_CERTS_PATH"
+fi
 
 # --- VALIDATE MACHINES FILE ---
 if [ ! -f "$MACHINES_FILE" ]; then
@@ -56,7 +65,7 @@ declare -a VMS_ALL=()
 
 echo "⏳ Reading VM definitions from CSV..." >&2
 
-while IFS=',' read -r prefix slesVersion spVersion suffix; do
+while IFS=',' read -r prefix slesVersion spVersion suffix || [ -n "$prefix" ]; do
     # Skip header line
     if [[ "$prefix" == "prefix" ]]; then
         continue
