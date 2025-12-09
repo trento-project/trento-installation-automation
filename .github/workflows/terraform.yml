@@ -1,0 +1,72 @@
+name: Provision Azure Infrastructure
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+  workflow_dispatch:
+
+env:
+  TF_VERSION: '1.6.0'
+  WORKING_DIR: './terraform'
+
+jobs:
+  terraform:
+    name: Terraform Plan & Apply
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: ./.github/actions/azure-auth
+        with:
+          credentials: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Generate SSH Key
+        id: ssh-key
+        working-directory: .
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C "terraform@github-actions"
+          echo "public_key=$(cat ~/.ssh/id_ed25519.pub)" >> $GITHUB_OUTPUT
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -no-color -out=tfplan -input=false
+        env:
+          TF_VAR_azure_resource_group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          TF_VAR_azure_owner_tag: ${{ secrets.AZURE_OWNER_TAG }}
+          TF_VAR_ssh_public_key_content: ${{ steps.ssh-key.outputs.public_key }}
+          TF_VAR_ssh_user: runner
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan

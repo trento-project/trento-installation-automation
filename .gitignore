@@ -10,7 +10,6 @@
 # Environment and configuration
 .env
 *.conf
-.machines.conf.csv
 
 # Terraform state files
 /terraform/*.tfstate
