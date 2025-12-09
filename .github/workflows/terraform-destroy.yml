@@ -1,25 +1,7 @@
 name: Destroy Azure Infrastructure
 
 on:
-  workflow_call:
-    secrets:
-      AZURE_CREDENTIALS:
-        required: true
-      AZURE_RESOURCE_GROUP:
-        required: true
-      AZURE_OWNER_TAG:
-        required: true
-      AZURE_BLOB_STORAGE:
-        required: true
-      AZURE_BLOB_STORAGE_TF_STATE_CONTAINER:
-        required: true
   workflow_dispatch:
-
-env:
-  TF_VERSION: '1.6.0'
-  WORKING_DIR: './terraform'
-  AZURE_BLOB_STORAGE: ${{ secrets.AZURE_BLOB_STORAGE || vars.AZURE_BLOB_STORAGE }}
-  AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ secrets.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER || vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
 
 jobs:
   terraform-destroy:
@@ -29,68 +11,15 @@ jobs:
     permissions:
       contents: read
 
-    defaults:
-      run:
-        working-directory: ${{ env.WORKING_DIR }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Azure Login
-        uses: ./.github/actions/azure-auth
+      - name: Run Terraform Destroy
+        uses: ./.github/actions/terraform-destroy
         with:
-          credentials: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Extract Azure Credentials
-        id: azure-creds
-        run: |
-          echo "client_id=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')" >> $GITHUB_OUTPUT
-          echo "client_secret=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientSecret')" >> $GITHUB_OUTPUT
-          echo "tenant_id=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.tenantId')" >> $GITHUB_OUTPUT
-          echo "subscription_id=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.subscriptionId')" >> $GITHUB_OUTPUT
-
-      - name: Generate SSH Key
-        id: ssh-key
-        working-directory: .
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C "terraform@github-actions"
-          echo "public_key=$(cat ~/.ssh/id_ed25519.pub)" >> $GITHUB_OUTPUT
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Terraform Init
-        id: init
-        run: |
-          terraform init \
-            -backend-config="storage_account_name=${{ env.AZURE_BLOB_STORAGE }}" \
-            -backend-config="container_name=${{ env.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}" \
-            -backend-config="key=terraform.tfstate" \
-            -backend-config="resource_group_name=${{ secrets.AZURE_RESOURCE_GROUP }}" \
-            -backend-config="client_id=${{ steps.azure-creds.outputs.client_id }}" \
-            -backend-config="client_secret=${{ steps.azure-creds.outputs.client_secret }}" \
-            -backend-config="tenant_id=${{ steps.azure-creds.outputs.tenant_id }}" \
-            -backend-config="subscription_id=${{ steps.azure-creds.outputs.subscription_id }}"
-
-      - name: Set ARM_SUBSCRIPTION_ID
-        id: subscription
-        run: |
-          ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-          if [ -z "$ARM_SUBSCRIPTION_ID" ]; then
-            echo "Error: Could not retrieve subscription ID from Azure CLI"
-            exit 1
-          fi
-          echo "ARM_SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID" >> $GITHUB_ENV
-          echo "Subscription ID set successfully"
-
-      - name: Terraform Destroy
-        env:
-          TF_VAR_azure_resource_group: ${{ secrets.AZURE_RESOURCE_GROUP }}
-          TF_VAR_azure_owner_tag: ${{ secrets.AZURE_OWNER_TAG }}
-          TF_VAR_ssh_public_key_content: ${{ steps.ssh-key.outputs.public_key }}
-          TF_VAR_ssh_user: runner
-        run: terraform destroy -auto-approve -input=false
+          azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
+          azure_resource_group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          azure_owner_tag: ${{ secrets.AZURE_OWNER_TAG }}
+          azure_blob_storage: ${{ vars.AZURE_BLOB_STORAGE }}
+          azure_blob_storage_container: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}

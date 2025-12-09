@@ -11,11 +11,13 @@ variable "azure_vms_location" {
 variable "ssh_public_key_content" {
   type        = string
   description = "Public key content"
+  default     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeKeyForDestroyOnly dummy@destroy"
 }
 
 variable "ssh_user" {
   type        = string
   description = "SSH user"
+  default     = "azureadm"
 }
 
 variable "azure_owner_tag" {

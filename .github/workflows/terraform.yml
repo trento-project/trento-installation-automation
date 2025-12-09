@@ -94,18 +94,7 @@ jobs:
           TF_VAR_azure_resource_group: ${{ secrets.AZURE_RESOURCE_GROUP }}
           TF_VAR_azure_owner_tag: ${{ secrets.AZURE_OWNER_TAG }}
           TF_VAR_ssh_public_key_content: ${{ steps.ssh-key.outputs.public_key }}
-          TF_VAR_ssh_user: runner
+          TF_VAR_ssh_user: ${{ vars.SSH_USER }}
 
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
-
-  destroy:
-    name: Destroy Infrastructure
-    needs: terraform
-    uses: ./.github/workflows/terraform-destroy.yml
-    secrets:
-      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
-      AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
-      AZURE_OWNER_TAG: ${{ secrets.AZURE_OWNER_TAG }}
-      AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
-      AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
