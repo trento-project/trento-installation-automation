@@ -49,6 +49,9 @@ resource "azurerm_linux_virtual_machine" "vm" {
   network_interface_ids = [azurerm_network_interface.nic[each.key].id]
   tags                  = local.common_tags
 
+  # Ensure NIC-NSG association is created before VM and destroyed after VM
+  depends_on = [azurerm_network_interface_security_group_association.nic_nsg_assoc]
+
   lifecycle {
     ignore_changes = [
       tags,
