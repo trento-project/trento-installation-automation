@@ -9,6 +9,8 @@ on:
 env:
   TF_VERSION: '1.6.0'
   WORKING_DIR: './terraform'
+  AZURE_BLOB_STORAGE: ${{ secrets.AZURE_BLOB_STORAGE }}
+  AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ secrets.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
 
 jobs:
   terraform:
@@ -51,7 +53,13 @@ jobs:
 
       - name: Terraform Init
         id: init
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="storage_account_name=${{ env.AZURE_BLOB_STORAGE }}" \
+            -backend-config="container_name=${{ env.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}" \
+            -backend-config="key=terraform.tfstate" \
+            -backend-config="resource_group_name=${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            -backend-config="use_azuread_auth=true"
 
       - name: Terraform Validate
         id: validate
@@ -88,3 +96,5 @@ jobs:
       AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
       AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
       AZURE_OWNER_TAG: ${{ secrets.AZURE_OWNER_TAG }}
+      AZURE_BLOB_STORAGE: ${{ secrets.AZURE_BLOB_STORAGE }}
+      AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ secrets.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
