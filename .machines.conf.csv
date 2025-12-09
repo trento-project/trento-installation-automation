@@ -1,2 +1,9 @@
 prefix,slesVersion,spVersion,suffix
-sles,15,4,rpm
+control,15,4,rpm
+target,15,4,rpm
+control,15,5,rpm
+target,15,5,rpm
+control,15,6,rpm
+target,15,6,rpm
+control,15,7,rpm
+target,15,7,rpm
