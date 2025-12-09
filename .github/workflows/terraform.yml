@@ -41,6 +41,14 @@ jobs:
           ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C "terraform@github-actions"
           echo "public_key=$(cat ~/.ssh/id_ed25519.pub)" >> $GITHUB_OUTPUT
 
+      - name: Extract Azure Credentials
+        id: azure-creds
+        run: |
+          echo "client_id=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')" >> $GITHUB_OUTPUT
+          echo "client_secret=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientSecret')" >> $GITHUB_OUTPUT
+          echo "tenant_id=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.tenantId')" >> $GITHUB_OUTPUT
+          echo "subscription_id=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.subscriptionId')" >> $GITHUB_OUTPUT
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -59,7 +67,10 @@ jobs:
             -backend-config="container_name=${{ env.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}" \
             -backend-config="key=terraform.tfstate" \
             -backend-config="resource_group_name=${{ secrets.AZURE_RESOURCE_GROUP }}" \
-            -backend-config="use_azuread_auth=true"
+            -backend-config="client_id=${{ steps.azure-creds.outputs.client_id }}" \
+            -backend-config="client_secret=${{ steps.azure-creds.outputs.client_secret }}" \
+            -backend-config="tenant_id=${{ steps.azure-creds.outputs.tenant_id }}" \
+            -backend-config="subscription_id=${{ steps.azure-creds.outputs.subscription_id }}"
 
       - name: Terraform Validate
         id: validate
