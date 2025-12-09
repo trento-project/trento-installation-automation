@@ -59,6 +59,17 @@ jobs:
         id: validate
         run: terraform validate -no-color
 
+      - name: Set ARM_SUBSCRIPTION_ID
+        id: subscription
+        run: |
+          ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+          if [ -z "$ARM_SUBSCRIPTION_ID" ]; then
+            echo "Error: Could not retrieve subscription ID from Azure CLI"
+            exit 1
+          fi
+          echo "ARM_SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID" >> $GITHUB_ENV
+          echo "Subscription ID set successfully"
+
       - name: Terraform Plan
         id: plan
         run: terraform plan -no-color -out=tfplan -input=false
