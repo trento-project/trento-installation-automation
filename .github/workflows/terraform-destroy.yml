@@ -1,9 +1,14 @@
 name: Destroy Azure Infrastructure
 
 on:
-  pull_request:
-    branches:
-      - main
+  workflow_call:
+    secrets:
+      AZURE_CREDENTIALS:
+        required: true
+      AZURE_RESOURCE_GROUP:
+        required: true
+      AZURE_OWNER_TAG:
+        required: true
   workflow_dispatch:
 
 env:

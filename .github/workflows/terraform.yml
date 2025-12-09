@@ -81,3 +81,12 @@ jobs:
 
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
+
+  destroy:
+    name: Destroy Infrastructure
+    needs: terraform
+    uses: ./.github/workflows/terraform-destroy.yml
+    secrets:
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+      AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+      AZURE_OWNER_TAG: ${{ secrets.AZURE_OWNER_TAG }}
