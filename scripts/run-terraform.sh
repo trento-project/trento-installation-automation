@@ -104,12 +104,25 @@ fi
 
 echo "✅ SSH keys exported as Terraform variables" >> "$LOG_FILE"
 
+# --- TERRAFORM BACKEND CONFIGURATION ---
+# Build backend config flags for Azure Storage (same as GitHub workflow)
+AZURE_BLOB_STORAGE_TF_STATE_CONTAINER="${AZURE_BLOB_STORAGE_TF_STATE_CONTAINER:-tfstate}"
+BACKEND_CONFIG=(
+    -backend-config="storage_account_name=${AZURE_BLOB_STORAGE}"
+    -backend-config="container_name=${AZURE_BLOB_STORAGE_TF_STATE_CONTAINER}"
+    -backend-config="key=terraform.tfstate"
+    -backend-config="resource_group_name=${AZURE_RESOURCE_GROUP}"
+    -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}"
+)
+
+echo "📋 Backend config: storage_account=${AZURE_BLOB_STORAGE}, container=${AZURE_BLOB_STORAGE_TF_STATE_CONTAINER}, resource_group=${AZURE_RESOURCE_GROUP}" >> "$LOG_FILE"
+
 # --- TERRAFORM EXECUTION ---
 # Execute Terraform in a sub-shell to redirect all output and capture exit code
 # Temporarily disable exit-on-error to capture the exit code
 set +e
 (
-    terraform -chdir=terraform init "$@"
+    terraform -chdir=terraform init "${BACKEND_CONFIG[@]}" "$@"
     terraform -chdir=terraform apply -auto-approve "$@"
 ) >> "$LOG_FILE" 2>&1
 TERRAFORM_EXIT_CODE=$?
