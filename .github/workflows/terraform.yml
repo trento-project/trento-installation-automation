@@ -33,13 +33,15 @@ jobs:
         with:
           credentials: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Generate SSH Key
+      - name: Generate Ephemeral SSH Key for Runner
         id: ssh-key
         working-directory: .
         run: |
           mkdir -p ~/.ssh
-          ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C "terraform@github-actions"
+          ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C "github-runner-ephemeral-$(date +%Y%m%d)"
+          chmod 600 ~/.ssh/id_ed25519
           echo "public_key=$(cat ~/.ssh/id_ed25519.pub)" >> $GITHUB_OUTPUT
+          echo "✅ Ephemeral SSH key generated for runner automation"
 
       - name: Extract Azure Credentials
         id: azure-creds
@@ -94,6 +96,7 @@ jobs:
           TF_VAR_azure_resource_group: ${{ secrets.AZURE_RESOURCE_GROUP }}
           TF_VAR_azure_owner_tag: ${{ secrets.AZURE_OWNER_TAG }}
           TF_VAR_ssh_public_key_content: ${{ steps.ssh-key.outputs.public_key }}
+          TF_VAR_ssh_debugging_public_key: ${{ vars.DEBUGGING_SSH_KEY }}
           TF_VAR_ssh_user: ${{ vars.SSH_USER }}
 
       - name: Terraform Apply
