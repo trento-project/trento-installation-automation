@@ -2,11 +2,6 @@ variable "azure_resource_group" {
   description = "Azure resource group"
   type        = string
 }
-variable "azure_vms_location" {
-  description = "Region to deploy resources"
-  type        = string
-  default     = "westeurope"
-}
 
 variable "ssh_public_key_content" {
   type        = string
