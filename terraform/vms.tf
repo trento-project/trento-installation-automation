@@ -66,10 +66,10 @@ resource "azurerm_linux_virtual_machine" "vm" {
 
   # Optional debugging key for manual SSH access
   dynamic "admin_ssh_key" {
-    for_each = var.ssh_debugging_public_key != "" ? [1] : []
+    for_each = var.debug_ssh_public_key != "" ? [1] : []
     content {
       username   = var.ssh_user
-      public_key = var.ssh_debugging_public_key
+      public_key = var.debug_ssh_public_key
     }
   }
 

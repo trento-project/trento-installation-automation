@@ -1,4 +1,4 @@
-name: Provision Azure Infrastructure
+name: Trento Installation Tests
 
 on:
   pull_request:
@@ -7,7 +7,6 @@ on:
   workflow_dispatch:
 
 env:
-  TF_VERSION: '1.6.0'
   WORKING_DIR: './terraform'
   AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
   AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
@@ -29,9 +28,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Azure Login
-        uses: ./.github/actions/azure-auth
+        uses: azure/login@v2
         with:
-          credentials: ${{ secrets.AZURE_CREDENTIALS }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Generate Ephemeral SSH Key for Runner
         id: ssh-key
@@ -51,10 +50,14 @@ jobs:
           echo "tenant_id=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.tenantId')" >> $GITHUB_OUTPUT
           echo "subscription_id=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.subscriptionId')" >> $GITHUB_OUTPUT
 
+      - name: Parse tool versions
+        uses: endorama/asdf-parse-tool-versions@v1
+        id: versions
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: ${{ env.TF_VERSION }}
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Terraform Format Check
         id: fmt
@@ -68,7 +71,7 @@ jobs:
             -backend-config="storage_account_name=${{ env.AZURE_BLOB_STORAGE }}" \
             -backend-config="container_name=${{ env.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}" \
             -backend-config="key=terraform.tfstate" \
-            -backend-config="resource_group_name=${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            -backend-config="resource_group_name=${{ vars.AZURE_RESOURCE_GROUP }}" \
             -backend-config="client_id=${{ steps.azure-creds.outputs.client_id }}" \
             -backend-config="client_secret=${{ steps.azure-creds.outputs.client_secret }}" \
             -backend-config="tenant_id=${{ steps.azure-creds.outputs.tenant_id }}" \
@@ -93,10 +96,10 @@ jobs:
         id: plan
         run: terraform plan -no-color -out=tfplan -input=false
         env:
-          TF_VAR_azure_resource_group: ${{ secrets.AZURE_RESOURCE_GROUP }}
-          TF_VAR_azure_owner_tag: ${{ secrets.AZURE_OWNER_TAG }}
+          TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          TF_VAR_azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
           TF_VAR_ssh_public_key_content: ${{ steps.ssh-key.outputs.public_key }}
-          TF_VAR_ssh_debugging_public_key: ${{ vars.DEBUGGING_SSH_KEY }}
+          TF_VAR_debug_ssh_public_key: ${{ vars.DEBUG_SSH_PUBLIC_KEY }}
           TF_VAR_ssh_user: ${{ vars.SSH_USER }}
 
       - name: Terraform Apply

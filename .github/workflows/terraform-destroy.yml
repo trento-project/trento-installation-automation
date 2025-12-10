@@ -1,9 +1,7 @@
-name: Destroy Azure Infrastructure
+name: Azure Cleanup
+# Destroy Azure Resources
 
 on:
-  # pull_request:
-  #   branches:
-  #     - main
   workflow_dispatch:
 
 jobs:
@@ -22,7 +20,7 @@ jobs:
         uses: ./.github/actions/terraform-destroy
         with:
           azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
-          azure_resource_group: ${{ secrets.AZURE_RESOURCE_GROUP }}
-          azure_owner_tag: ${{ secrets.AZURE_OWNER_TAG }}
+          azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
           azure_blob_storage: ${{ vars.AZURE_BLOB_STORAGE }}
           azure_blob_storage_container: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}

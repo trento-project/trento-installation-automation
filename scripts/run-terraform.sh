@@ -84,21 +84,21 @@ export TF_VAR_ssh_private_key_path="$SSH_PRIVATE_KEY_PATH"
 export TF_VAR_ssh_public_key_content="$SSH_PUBLIC_KEY_CONTENT"
 
 # Export debugging public key if explicitly configured and exists
-if [ -n "${DEBUGGING_SSH_KEY_PATH:-}" ]; then
+if [ -n "${DEBUG_SSH_PUBLIC_KEY_PATH:-}" ]; then
     # Expand tilde in path
-    EXPANDED_DEBUG_KEY_PATH="${DEBUGGING_SSH_KEY_PATH/#\~/$HOME}"
+    EXPANDED_DEBUG_KEY_PATH="${DEBUG_SSH_PUBLIC_KEY_PATH/#\~/$HOME}"
     if [ -f "${EXPANDED_DEBUG_KEY_PATH}.pub" ]; then
-        export TF_VAR_ssh_debugging_public_key="$(cat "${EXPANDED_DEBUG_KEY_PATH}.pub")"
+        export TF_VAR_debug_ssh_public_key="$(cat "${EXPANDED_DEBUG_KEY_PATH}.pub")"
         echo "✅ Debugging SSH public key exported from ${EXPANDED_DEBUG_KEY_PATH}.pub" >> "$LOG_FILE"
         echo "   VMs will have both ephemeral key (for automation) and debugging key (for manual access)" >> "$LOG_FILE"
     else
-        export TF_VAR_ssh_debugging_public_key=""
-        echo "⚠️  DEBUGGING_SSH_KEY_PATH set but ${EXPANDED_DEBUG_KEY_PATH}.pub not found" >> "$LOG_FILE"
+        export TF_VAR_debug_ssh_public_key=""
+        echo "⚠️  DEBUG_SSH_PUBLIC_KEY_PATH set but ${EXPANDED_DEBUG_KEY_PATH}.pub not found" >> "$LOG_FILE"
         echo "   VMs will only have ephemeral key" >> "$LOG_FILE"
     fi
 else
-    export TF_VAR_ssh_debugging_public_key=""
-    echo "ℹ️  No DEBUGGING_SSH_KEY_PATH configured, using only ephemeral key" >> "$LOG_FILE"
+    export TF_VAR_debug_ssh_public_key=""
+    echo "ℹ️  No DEBUG_SSH_PUBLIC_KEY_PATH configured, using only ephemeral key" >> "$LOG_FILE"
     echo "   You can SSH with: ssh -i .ssh-keys/id_ed25519 $SSH_USER@<vm-fqdn>" >> "$LOG_FILE"
 fi
 

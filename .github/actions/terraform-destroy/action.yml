@@ -19,8 +19,7 @@ inputs:
     required: true
   terraform_version:
     description: 'Terraform version to use'
-    required: false
-    default: '1.6.0'
+    required: true
   working_directory:
     description: 'Working directory for Terraform'
     required: false
@@ -30,9 +29,9 @@ runs:
   using: 'composite'
   steps:
     - name: Azure Login
-      uses: ./.github/actions/azure-auth
+      uses: azure/login@v2
       with:
-        credentials: ${{ inputs.azure_credentials }}
+        creds: ${{ inputs.azure_credentials }}
 
     - name: Extract Azure Credentials
       id: azure-creds

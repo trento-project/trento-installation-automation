@@ -14,7 +14,7 @@ variable "ssh_public_key_content" {
   default     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHZ/JWVNyc2lzgJZsjab8abaBjqobCYq21k1HQuqnoLD dummy@destroy"
 }
 
-variable "ssh_debugging_public_key" {
+variable "debug_ssh_public_key" {
   type        = string
   description = "Persistent debugging public key for manual SSH access"
   default     = ""
