@@ -1,6 +1,7 @@
 name: Trento Installation Tests
 
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       destroy_after:
@@ -92,11 +93,19 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
 
+      - name: Register machines with SUSEConnect
+        uses: ./.github/actions/register-machines
+        with:
+          private_ssh_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          suse_registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
+          suse_registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
+          azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+
   destroy:
     name: Terraform Destroy
     runs-on: ubuntu-24.04
     needs: terraform
-    if: inputs.destroy_after
+    # if: inputs.destroy_after
 
     steps:
       - name: Checkout repository
