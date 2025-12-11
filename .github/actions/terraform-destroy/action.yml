@@ -35,12 +35,9 @@ runs:
 
     - name: Extract Azure Credentials
       id: azure-creds
-      shell: bash
-      run: |
-        echo "client_id=$(echo '${{ inputs.azure_credentials }}' | jq -r '.clientId')" >> $GITHUB_OUTPUT
-        echo "client_secret=$(echo '${{ inputs.azure_credentials }}' | jq -r '.clientSecret')" >> $GITHUB_OUTPUT
-        echo "tenant_id=$(echo '${{ inputs.azure_credentials }}' | jq -r '.tenantId')" >> $GITHUB_OUTPUT
-        echo "subscription_id=$(echo '${{ inputs.azure_credentials }}' | jq -r '.subscriptionId')" >> $GITHUB_OUTPUT
+      uses: ./.github/actions/extract-azure-credentials
+      with:
+        azure_credentials: ${{ inputs.azure_credentials }}
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
