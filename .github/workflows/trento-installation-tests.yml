@@ -105,7 +105,7 @@ jobs:
     name: Terraform Destroy
     runs-on: ubuntu-24.04
     needs: terraform
-    # if: inputs.destroy_after
+    if: inputs.destroy_after
 
     steps:
       - name: Checkout repository
