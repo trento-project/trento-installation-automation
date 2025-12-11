@@ -2,7 +2,7 @@ name: Trento Installation Tests
 
 on:
   pull_request:
-    
+
   workflow_dispatch:
     inputs:
       destroy_after:
@@ -96,7 +96,7 @@ jobs:
 
   destroy:
     name: Terraform Destroy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: terraform
     # if: inputs.destroy_after
 
@@ -116,3 +116,4 @@ jobs:
           azure_blob_storage: ${{ vars.AZURE_BLOB_STORAGE }}
           azure_blob_storage_container: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
           terraform_version: ${{ env.TERRAFORM_VERSION }}
+          ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}

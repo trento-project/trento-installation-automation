@@ -20,6 +20,9 @@ inputs:
   terraform_version:
     description: 'Terraform version to use'
     required: true
+  ssh_public_key_content:
+    description: 'SSH public key content for VM access'
+    required: true
   working_directory:
     description: 'Working directory for Terraform'
     required: false
@@ -77,4 +80,5 @@ runs:
       env:
         TF_VAR_azure_resource_group: ${{ inputs.azure_resource_group }}
         TF_VAR_azure_owner_tag: ${{ inputs.azure_owner_tag }}
+        TF_VAR_ssh_public_key_content: ${{ inputs.ssh_public_key_content }}
       run: terraform destroy -auto-approve -input=false

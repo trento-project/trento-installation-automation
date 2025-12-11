@@ -119,23 +119,18 @@ if [ ! -f "$PLAYBOOK_FILE" ]; then
 fi
 
 # --- CONFIGURE SSH KEY FOR ANSIBLE ---
-# Validate SSH key from .env
-if [ -z "${PRIVATE_SSH_KEY_CONTENT:-}" ]; then
-    echo "❌ Error: PRIVATE_SSH_KEY_CONTENT is not set in .env file" >&2
-    echo "   Please set PRIVATE_SSH_KEY_CONTENT and PUBLIC_SSH_KEY_CONTENT in .env" >&2
-    exit 1
-fi
-
-# Setup SSH key from .env
+# Keys should be created by setup-ssh-keys.sh script
 SSH_KEYS_DIR="$PROJECT_ROOT/.ssh-keys"
 SSH_PRIVATE_KEY_PATH="$SSH_KEYS_DIR/id_ed25519"
 
-mkdir -p "$SSH_KEYS_DIR"
-echo "$PRIVATE_SSH_KEY_CONTENT" > "$SSH_PRIVATE_KEY_PATH"
-chmod 600 "$SSH_PRIVATE_KEY_PATH"
+if [ ! -f "$SSH_PRIVATE_KEY_PATH" ]; then
+    echo "❌ Error: SSH private key not found at $SSH_PRIVATE_KEY_PATH" >&2
+    echo "   Please run: ./scripts/setup-ssh-keys.sh" >&2
+    exit 1
+fi
 
 export ANSIBLE_PRIVATE_KEY_FILE="$SSH_PRIVATE_KEY_PATH"
-echo "✅ Using SSH private key from .env" >&2
+echo "✅ Using SSH private key from $SSH_KEYS_DIR" >&2
 
 # --- EXECUTE ANSIBLE PLAYBOOK ---
 echo "" >&2

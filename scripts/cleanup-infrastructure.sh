@@ -39,15 +39,31 @@ echo "--- $(date) ---" >> "$LOG_FILE"
 # --- LOAD ENVIRONMENT VARIABLES ---
 echo "📦 Loading environment variables from $ENV_FILE..." >> "$LOG_FILE"
 
-# Load .env and export both regular and Terraform-style vars
-while IFS= read -r line || [ -n "$line" ]; do
-    [[ -z "$line" || "$line" =~ ^# ]] && continue
-    eval "export $line"
-    key="$(echo "$line" | cut -d '=' -f1)"
-    lower_key="$(echo "$key" | tr '[:upper:]' '[:lower:]')"
-    tfvar_name="TF_VAR_${lower_key}"
-    eval "export $tfvar_name='${!key}'"
-done < "$ENV_FILE"
+# Load .env file using source (handles multi-line values safely)
+set -a
+source "$ENV_FILE"
+set +a
+
+# Validate required variables from .env
+if [ -z "${PUBLIC_SSH_KEY_CONTENT:-}" ]; then
+    echo "❌ Error: PUBLIC_SSH_KEY_CONTENT is not set in .env file" >&2
+    exit 1
+fi
+
+if [ -z "${AZURE_RESOURCE_GROUP:-}" ]; then
+    echo "❌ Error: AZURE_RESOURCE_GROUP is not set in .env file" >&2
+    exit 1
+fi
+
+if [ -z "${AZURE_OWNER_TAG:-}" ]; then
+    echo "❌ Error: AZURE_OWNER_TAG is not set in .env file" >&2
+    exit 1
+fi
+
+# Export Terraform variables
+export TF_VAR_ssh_public_key_content="$PUBLIC_SSH_KEY_CONTENT"
+export TF_VAR_azure_resource_group="$AZURE_RESOURCE_GROUP"
+export TF_VAR_azure_owner_tag="$AZURE_OWNER_TAG"
 
 echo "✅ Environment variables loaded" >> "$LOG_FILE"
 

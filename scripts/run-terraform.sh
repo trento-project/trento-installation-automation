@@ -38,39 +38,33 @@ mkdir -p "$LOGS_DIR"
 echo "⚙️  Starting Terraform execution..." >&2
 echo "--- $(date) ---" >> "$LOG_FILE"
 
-# --- LOAD .ENV FILE FIRST ---
-# Load .env to get SSH key content and other variables (handles multi-line values)
+# --- LOAD .ENV FILE ---
+# Load .env for environment variables and PUBLIC_SSH_KEY_CONTENT (needed by Terraform)
 set -a
 source "$ENV_FILE"
 set +a
 
-# --- VALIDATE SSH KEYS FROM .ENV ---
-if [ -z "${PUBLIC_SSH_KEY_CONTENT:-}" ]; then
-    echo "❌ Error: PUBLIC_SSH_KEY_CONTENT is not set in .env file" >&2
-    echo "   Please set PRIVATE_SSH_KEY_CONTENT and PUBLIC_SSH_KEY_CONTENT in .env" >&2
-    exit 1
-fi
-
-if [ -z "${PRIVATE_SSH_KEY_CONTENT:-}" ]; then
-    echo "❌ Error: PRIVATE_SSH_KEY_CONTENT is not set in .env file" >&2
-    echo "   Please set PRIVATE_SSH_KEY_CONTENT and PUBLIC_SSH_KEY_CONTENT in .env" >&2
-    exit 1
-fi
-
-# --- SETUP SSH KEYS ---
-# Use keys from .env and write to .ssh-keys directory for SSH access
+# --- VALIDATE SSH KEYS EXIST ---
+# Keys should be created by setup-ssh-keys.sh script
 SSH_KEYS_DIR="$PROJECT_ROOT/.ssh-keys"
 SSH_PRIVATE_KEY_PATH="$SSH_KEYS_DIR/id_ed25519"
 SSH_PUBLIC_KEY_PATH="$SSH_KEYS_DIR/id_ed25519.pub"
 
-mkdir -p "$SSH_KEYS_DIR"
-echo "$PRIVATE_SSH_KEY_CONTENT" > "$SSH_PRIVATE_KEY_PATH"
-chmod 600 "$SSH_PRIVATE_KEY_PATH"
-echo "$PUBLIC_SSH_KEY_CONTENT" > "$SSH_PUBLIC_KEY_PATH"
-chmod 644 "$SSH_PUBLIC_KEY_PATH"
+if [ ! -f "$SSH_PRIVATE_KEY_PATH" ] || [ ! -f "$SSH_PUBLIC_KEY_PATH" ]; then
+    echo "❌ Error: SSH keys not found in $SSH_KEYS_DIR" >&2
+    echo "   Please run: ./scripts/setup-ssh-keys.sh" >&2
+    exit 1
+fi
+
+# Validate PUBLIC_SSH_KEY_CONTENT from .env (required by Terraform)
+if [ -z "${PUBLIC_SSH_KEY_CONTENT:-}" ]; then
+    echo "❌ Error: PUBLIC_SSH_KEY_CONTENT is not set in .env file" >&2
+    echo "   Please set PUBLIC_SSH_KEY_CONTENT in .env" >&2
+    exit 1
+fi
 
 export SSH_PRIVATE_KEY_PATH
-echo "✅ Using SSH keys from .env" >&2
+echo "✅ Using SSH keys from $SSH_KEYS_DIR" >&2
 
 # --- EXPORT TERRAFORM VARIABLES ---
 echo "📦 Exporting Terraform variables..." >> "$LOG_FILE"
