@@ -2,6 +2,9 @@ name: Azure Cleanup
 # Destroy Azure Resources
 
 on:
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
