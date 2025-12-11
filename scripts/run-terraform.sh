@@ -38,33 +38,45 @@ mkdir -p "$LOGS_DIR"
 echo "⚙️  Starting Terraform execution..." >&2
 echo "--- $(date) ---" >> "$LOG_FILE"
 
-# --- LOAD SSH KEYS ---
+# --- LOAD .ENV FILE ---
+# Load .env for environment variables and PUBLIC_SSH_KEY_CONTENT (needed by Terraform)
+set -a
+source "$ENV_FILE"
+set +a
+
+# --- VALIDATE SSH KEYS EXIST ---
+# Keys should be created by setup-ssh-keys.sh script
 SSH_KEYS_DIR="$PROJECT_ROOT/.ssh-keys"
 SSH_PRIVATE_KEY_PATH="$SSH_KEYS_DIR/id_ed25519"
 SSH_PUBLIC_KEY_PATH="$SSH_KEYS_DIR/id_ed25519.pub"
 
-if [ ! -f "$SSH_PUBLIC_KEY_PATH" ]; then
-    echo "❌ Error: SSH public key not found at $SSH_PUBLIC_KEY_PATH" >&2
-    echo "   Run ./scripts/setup-ssh-keys.sh first" >&2
+if [ ! -f "$SSH_PRIVATE_KEY_PATH" ] || [ ! -f "$SSH_PUBLIC_KEY_PATH" ]; then
+    echo "❌ Error: SSH keys not found in $SSH_KEYS_DIR" >&2
+    echo "   Please run: ./scripts/setup-ssh-keys.sh" >&2
+    exit 1
+fi
+
+# Validate PUBLIC_SSH_KEY_CONTENT from .env (required by Terraform)
+if [ -z "${PUBLIC_SSH_KEY_CONTENT:-}" ]; then
+    echo "❌ Error: PUBLIC_SSH_KEY_CONTENT is not set in .env file" >&2
+    echo "   Please set PUBLIC_SSH_KEY_CONTENT in .env" >&2
     exit 1
 fi
 
 export SSH_PRIVATE_KEY_PATH
-export SSH_PUBLIC_KEY_CONTENT="$(cat "$SSH_PUBLIC_KEY_PATH")"
 echo "✅ Using SSH keys from $SSH_KEYS_DIR" >&2
 
-# --- LOAD ENVIRONMENT VARIABLES ---
-echo "📦 Loading environment variables from $ENV_FILE..." >> "$LOG_FILE"
+# --- EXPORT TERRAFORM VARIABLES ---
+echo "📦 Exporting Terraform variables..." >> "$LOG_FILE"
 
-# Load .env and export both regular and Terraform-style vars
-while IFS= read -r line || [ -n "$line" ]; do
-    [[ -z "$line" || "$line" =~ ^# ]] && continue
-    eval "export $line"
-    key="$(echo "$line" | cut -d '=' -f1)"
-    lower_key="$(echo "$key" | tr '[:upper:]' '[:lower:]')"
-    tfvar_name="TF_VAR_${lower_key}"
-    eval "export $tfvar_name='${!key}'"
-done < "$ENV_FILE"
+# Export Terraform-style variables from already loaded .env
+# SSH keys
+export TF_VAR_ssh_private_key_path="$SSH_PRIVATE_KEY_PATH"
+export TF_VAR_ssh_public_key_content="$PUBLIC_SSH_KEY_CONTENT"
+
+# Azure configuration
+export TF_VAR_azure_resource_group="${AZURE_RESOURCE_GROUP}"
+export TF_VAR_azure_owner_tag="${AZURE_OWNER_TAG}"
 
 echo "✅ Environment variables loaded. Running: terraform $*" >> "$LOG_FILE"
 
@@ -78,18 +90,27 @@ if [ -z "$ARM_SUBSCRIPTION_ID" ]; then
 fi
 export ARM_SUBSCRIPTION_ID
 echo "✅ ARM_SUBSCRIPTION_ID set to: $ARM_SUBSCRIPTION_ID" >> "$LOG_FILE"
+echo "   You can SSH with: ssh -i .ssh-keys/id_ed25519 cloudadmin@<vm-fqdn>" >> "$LOG_FILE"
 
-# --- EXPORT SSH KEYS AS TERRAFORM VARIABLES ---
-export TF_VAR_ssh_private_key_path="$SSH_PRIVATE_KEY_PATH"
-export TF_VAR_ssh_public_key_content="$SSH_PUBLIC_KEY_CONTENT"
-echo "✅ SSH keys exported as Terraform variables" >> "$LOG_FILE"
+# --- TERRAFORM BACKEND CONFIGURATION ---
+# Build backend config flags for Azure Storage (same as GitHub workflow)
+AZURE_BLOB_STORAGE_TF_STATE_CONTAINER="${AZURE_BLOB_STORAGE_TF_STATE_CONTAINER:-tfstate}"
+BACKEND_CONFIG=(
+    -backend-config="storage_account_name=${AZURE_BLOB_STORAGE}"
+    -backend-config="container_name=${AZURE_BLOB_STORAGE_TF_STATE_CONTAINER}"
+    -backend-config="key=terraform.tfstate"
+    -backend-config="resource_group_name=${AZURE_RESOURCE_GROUP}"
+    -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}"
+)
+
+echo "📋 Backend config: storage_account=${AZURE_BLOB_STORAGE}, container=${AZURE_BLOB_STORAGE_TF_STATE_CONTAINER}, resource_group=${AZURE_RESOURCE_GROUP}" >> "$LOG_FILE"
 
 # --- TERRAFORM EXECUTION ---
 # Execute Terraform in a sub-shell to redirect all output and capture exit code
 # Temporarily disable exit-on-error to capture the exit code
 set +e
 (
-    terraform -chdir=terraform init "$@"
+    terraform -chdir=terraform init "${BACKEND_CONFIG[@]}" "$@"
     terraform -chdir=terraform apply -auto-approve "$@"
 ) >> "$LOG_FILE" 2>&1
 TERRAFORM_EXIT_CODE=$?

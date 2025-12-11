@@ -1,0 +1,84 @@
+name: 'Terraform Destroy'
+description: 'Destroy Terraform-managed infrastructure in Azure'
+
+inputs:
+  azure_credentials:
+    description: 'Azure credentials JSON'
+    required: true
+  azure_resource_group:
+    description: 'Azure resource group name'
+    required: true
+  azure_owner_tag:
+    description: 'Azure owner tag'
+    required: true
+  azure_blob_storage:
+    description: 'Azure storage account name for state'
+    required: true
+  azure_blob_storage_container:
+    description: 'Azure storage container name for state'
+    required: true
+  terraform_version:
+    description: 'Terraform version to use'
+    required: true
+  ssh_public_key_content:
+    description: 'SSH public key content for VM access'
+    required: true
+  working_directory:
+    description: 'Working directory for Terraform'
+    required: false
+    default: './terraform'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        creds: ${{ inputs.azure_credentials }}
+
+    - name: Extract Azure Credentials
+      id: azure-creds
+      uses: ./.github/actions/extract-azure-credentials
+      with:
+        azure_credentials: ${{ inputs.azure_credentials }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform_version }}
+
+    - name: Terraform Init
+      id: init
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: |
+        terraform init \
+          -backend-config="storage_account_name=${{ inputs.azure_blob_storage }}" \
+          -backend-config="container_name=${{ inputs.azure_blob_storage_container }}" \
+          -backend-config="key=terraform.tfstate" \
+          -backend-config="resource_group_name=${{ inputs.azure_resource_group }}" \
+          -backend-config="client_id=${{ steps.azure-creds.outputs.client_id }}" \
+          -backend-config="client_secret=${{ steps.azure-creds.outputs.client_secret }}" \
+          -backend-config="tenant_id=${{ steps.azure-creds.outputs.tenant_id }}" \
+          -backend-config="subscription_id=${{ steps.azure-creds.outputs.subscription_id }}"
+
+    - name: Set ARM_SUBSCRIPTION_ID
+      id: subscription
+      shell: bash
+      run: |
+        ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+        if [ -z "$ARM_SUBSCRIPTION_ID" ]; then
+          echo "Error: Could not retrieve subscription ID from Azure CLI"
+          exit 1
+        fi
+        echo "ARM_SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID" >> $GITHUB_ENV
+        echo "Subscription ID set successfully"
+
+    - name: Terraform Destroy
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      env:
+        TF_VAR_azure_resource_group: ${{ inputs.azure_resource_group }}
+        TF_VAR_azure_owner_tag: ${{ inputs.azure_owner_tag }}
+        TF_VAR_ssh_public_key_content: ${{ inputs.ssh_public_key_content }}
+      run: terraform destroy -auto-approve -input=false

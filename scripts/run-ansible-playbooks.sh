@@ -119,17 +119,18 @@ if [ ! -f "$PLAYBOOK_FILE" ]; then
 fi
 
 # --- CONFIGURE SSH KEY FOR ANSIBLE ---
+# Keys should be created by setup-ssh-keys.sh script
 SSH_KEYS_DIR="$PROJECT_ROOT/.ssh-keys"
-SSH_PRIVATE_KEY_PATH="${SSH_PRIVATE_KEY_PATH:-$SSH_KEYS_DIR/id_ed25519}"
+SSH_PRIVATE_KEY_PATH="$SSH_KEYS_DIR/id_ed25519"
 
 if [ ! -f "$SSH_PRIVATE_KEY_PATH" ]; then
     echo "❌ Error: SSH private key not found at $SSH_PRIVATE_KEY_PATH" >&2
-    echo "   Run ./scripts/setup-ssh-keys.sh or ./scripts/run-terraform.sh first" >&2
+    echo "   Please run: ./scripts/setup-ssh-keys.sh" >&2
     exit 1
 fi
 
 export ANSIBLE_PRIVATE_KEY_FILE="$SSH_PRIVATE_KEY_PATH"
-echo "✅ Using SSH private key: $SSH_PRIVATE_KEY_PATH" >&2
+echo "✅ Using SSH private key from $SSH_KEYS_DIR" >&2
 
 # --- EXECUTE ANSIBLE PLAYBOOK ---
 echo "" >&2

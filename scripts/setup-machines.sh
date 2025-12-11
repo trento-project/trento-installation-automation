@@ -55,23 +55,18 @@ if [ ! -f "$MACHINES_CSV" ]; then
     exit 1
 fi
 
-# --- VALIDATE REQUIRED VARIABLES ---
-if [ -z "${SSH_USER:-}" ]; then
-    echo "❌ Error: SSH_USER variable is not defined in .env" >&2
-    exit 1
-fi
-
-# --- USE GENERATED SSH KEYS ---
+# --- VALIDATE SSH KEYS EXIST ---
+# Keys should be created by setup-ssh-keys.sh script
 SSH_KEYS_DIR="$PROJECT_ROOT/.ssh-keys"
-SSH_PRIVATE_KEY_PATH="${SSH_PRIVATE_KEY_PATH:-$SSH_KEYS_DIR/id_ed25519}"
+SSH_PRIVATE_KEY_PATH="$SSH_KEYS_DIR/id_ed25519"
 
 if [ ! -f "$SSH_PRIVATE_KEY_PATH" ]; then
     echo "❌ Error: SSH private key not found at $SSH_PRIVATE_KEY_PATH" >&2
-    echo "   Run ./scripts/setup-ssh-keys.sh first" >&2
+    echo "   Please run: ./scripts/setup-ssh-keys.sh" >&2
     exit 1
 fi
 
-echo "✅ Using SSH private key: $SSH_PRIVATE_KEY_PATH" >&2
+echo "✅ Using SSH private key from $SSH_KEYS_DIR" >&2
 
 # --- SETUP LOGGING ---
 mkdir -p "$LOGS_DIR"
@@ -84,7 +79,7 @@ grep -v '^$' "$MACHINES_CSV" > "$TEMP_MACHINES_FILE"
 initialize_vm() {
     local FULL_FQDN=$1
     local VM_NAME_BASE=$2
-    local USER="$SSH_USER"
+    local USER="cloudadmin"
     local FQDN="$FULL_FQDN"
 
     echo "🛠️  Starting initialization: $VM_NAME_BASE (Log: $LOGS_DIR/${VM_NAME_BASE}.log)"
@@ -197,7 +192,7 @@ EOF_REMOTE
 initialize_vm_sles16() {
     local FULL_FQDN=$1
     local VM_NAME_BASE=$2
-    local USER="$SSH_USER"
+    local USER="cloudadmin"
     local FQDN="$FULL_FQDN"
 
     echo "🛠️  Starting SLES 16+ initialization: $VM_NAME_BASE (Log: $LOGS_DIR/${VM_NAME_BASE}.log)"
@@ -256,7 +251,7 @@ EOF_REMOTE
 initialize_vm_helm() {
     local FULL_FQDN=$1
     local VM_NAME_BASE=$2
-    local USER="$SSH_USER"
+    local USER="cloudadmin"
     local FQDN="$FULL_FQDN"
 
     echo "🛠️  Starting Helm VM initialization (registration only): $VM_NAME_BASE (Log: $LOGS_DIR/${VM_NAME_BASE}.log)"

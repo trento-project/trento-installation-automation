@@ -1,0 +1,33 @@
+name: 'Extract Azure Credentials'
+description: 'Extract individual fields from Azure credentials JSON'
+
+inputs:
+  azure_credentials:
+    description: 'Azure credentials JSON (containing clientId, clientSecret, tenantId, subscriptionId)'
+    required: true
+
+outputs:
+  client_id:
+    description: 'Azure Service Principal Client ID'
+    value: ${{ steps.extract.outputs.client_id }}
+  client_secret:
+    description: 'Azure Service Principal Client Secret'
+    value: ${{ steps.extract.outputs.client_secret }}
+  tenant_id:
+    description: 'Azure Tenant ID'
+    value: ${{ steps.extract.outputs.tenant_id }}
+  subscription_id:
+    description: 'Azure Subscription ID'
+    value: ${{ steps.extract.outputs.subscription_id }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Extract credentials
+      id: extract
+      shell: bash
+      run: |
+        echo "client_id=$(echo '${{ inputs.azure_credentials }}' | jq -r '.clientId')" >> $GITHUB_OUTPUT
+        echo "client_secret=$(echo '${{ inputs.azure_credentials }}' | jq -r '.clientSecret')" >> $GITHUB_OUTPUT
+        echo "tenant_id=$(echo '${{ inputs.azure_credentials }}' | jq -r '.tenantId')" >> $GITHUB_OUTPUT
+        echo "subscription_id=$(echo '${{ inputs.azure_credentials }}' | jq -r '.subscriptionId')" >> $GITHUB_OUTPUT

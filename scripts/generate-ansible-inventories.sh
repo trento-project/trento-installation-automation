@@ -39,7 +39,7 @@ set +a
 AZURE_VMS_LOCATION="${AZURE_VMS_LOCATION:-westeurope}"
 
 # --- VALIDATE REQUIRED VARIABLES ---
-REQUIRED_VARS=(ANSIBLE_VM_CERTS_PATH SSH_USER ANSIBLE_INVENTORIES_PATH)
+REQUIRED_VARS=(ANSIBLE_VM_CERTS_PATH ANSIBLE_INVENTORIES_PATH)
 for var in "${REQUIRED_VARS[@]}"; do
     if [ -z "${!var}" ]; then
         echo "❌ Error: $var is not set in .env" >&2
@@ -118,7 +118,7 @@ EOF
         fqdn="${vm_name}.${AZURE_VMS_LOCATION}.cloudapp.azure.com"
         {
             echo "        ${fqdn}:"
-            echo "          ansible_user: ${SSH_USER}"
+            echo "          ansible_user: cloudadmin"
         } >> "$file_path"
     done
 

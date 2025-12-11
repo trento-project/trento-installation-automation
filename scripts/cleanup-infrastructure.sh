@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 
 # ==============================================================================
-# Delete Azure VMs
+# Cleanup Infrastructure (Terraform Destroy)
 # ==============================================================================
-# Deletes all VMs and their dependencies (NICs, Disks, Public IPs) from the
-# Azure resource group. Storage Accounts and Container Registries are preserved.
-# The script performs multiple cleanup passes to handle dependency ordering.
+# Destroys all Terraform-managed Azure infrastructure using terraform destroy.
+# Uses the same backend configuration as run-terraform.sh.
 #
 # Inputs:
 #   - .env: Environment configuration file
+#   - terraform/: Terraform configuration directory
 # Outputs:
-#   - logs/azure-delete-vm.log: Full deletion execution log
+#   - logs/tf-destroy.log: Full Terraform destruction log
 # ==============================================================================
 
 # --- BASH CONFIGURATION ---
@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 ENV_FILE="$PROJECT_ROOT/.env"
 LOGS_DIR="$PROJECT_ROOT/logs"
-LOG_FILE="$LOGS_DIR/azure-delete-vm.log"
+LOG_FILE="$LOGS_DIR/tf-destroy.log"
 
 # --- VALIDATE ENVIRONMENT FILE ---
 if [ ! -f "$ENV_FILE" ]; then
@@ -29,31 +29,72 @@ if [ ! -f "$ENV_FILE" ]; then
     exit 1
 fi
 
-# --- LOAD ENVIRONMENT VARIABLES ---
-set -a
-source "$ENV_FILE"
-set +a
-
-# --- VALIDATE REQUIRED VARIABLES ---
-if [ -z "${AZURE_RESOURCE_GROUP:-}" ]; then
-    echo "❌ Error: AZURE_RESOURCE_GROUP not set in .env" >&2
-    exit 1
-fi
-
-RESOURCE_GROUP_NAME="$AZURE_RESOURCE_GROUP"
-
 # --- SETUP LOGGING ---
 mkdir -p "$LOGS_DIR"
 : > "$LOG_FILE"
 
-echo "🗑️  Delete process started for resource group: $RESOURCE_GROUP_NAME" >&2
+echo "🗑️  Starting Terraform destroy..." >&2
 echo "--- $(date) ---" >> "$LOG_FILE"
+
+# --- LOAD ENVIRONMENT VARIABLES ---
+echo "📦 Loading environment variables from $ENV_FILE..." >> "$LOG_FILE"
+
+# Load .env file using source (handles multi-line values safely)
+set -a
+source "$ENV_FILE"
+set +a
+
+# Validate required variables from .env
+if [ -z "${PUBLIC_SSH_KEY_CONTENT:-}" ]; then
+    echo "❌ Error: PUBLIC_SSH_KEY_CONTENT is not set in .env file" >&2
+    exit 1
+fi
+
+if [ -z "${AZURE_RESOURCE_GROUP:-}" ]; then
+    echo "❌ Error: AZURE_RESOURCE_GROUP is not set in .env file" >&2
+    exit 1
+fi
+
+if [ -z "${AZURE_OWNER_TAG:-}" ]; then
+    echo "❌ Error: AZURE_OWNER_TAG is not set in .env file" >&2
+    exit 1
+fi
+
+# Export Terraform variables
+export TF_VAR_ssh_public_key_content="$PUBLIC_SSH_KEY_CONTENT"
+export TF_VAR_azure_resource_group="$AZURE_RESOURCE_GROUP"
+export TF_VAR_azure_owner_tag="$AZURE_OWNER_TAG"
+
+echo "✅ Environment variables loaded" >> "$LOG_FILE"
+
+# --- SET ARM_SUBSCRIPTION_ID FROM AZURE CLI ---
+echo "🔑 Setting ARM_SUBSCRIPTION_ID from Azure CLI..." >> "$LOG_FILE"
+ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv 2>>"$LOG_FILE")
+if [ -z "$ARM_SUBSCRIPTION_ID" ]; then
+    echo "❌ Error: Could not retrieve subscription ID from Azure CLI" >&2
+    echo "ERROR: Failed to get subscription ID from 'az account show'" >> "$LOG_FILE"
+    exit 1
+fi
+export ARM_SUBSCRIPTION_ID
+echo "✅ ARM_SUBSCRIPTION_ID set to: $ARM_SUBSCRIPTION_ID" >> "$LOG_FILE"
+
+# --- TERRAFORM BACKEND CONFIGURATION ---
+AZURE_BLOB_STORAGE_TF_STATE_CONTAINER="${AZURE_BLOB_STORAGE_TF_STATE_CONTAINER:-tfstate}"
+BACKEND_CONFIG=(
+    -backend-config="storage_account_name=${AZURE_BLOB_STORAGE}"
+    -backend-config="container_name=${AZURE_BLOB_STORAGE_TF_STATE_CONTAINER}"
+    -backend-config="key=terraform.tfstate"
+    -backend-config="resource_group_name=${AZURE_RESOURCE_GROUP}"
+    -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}"
+)
+
+echo "📋 Backend config: storage_account=${AZURE_BLOB_STORAGE}, container=${AZURE_BLOB_STORAGE_TF_STATE_CONTAINER}, resource_group=${AZURE_RESOURCE_GROUP}" >> "$LOG_FILE"
 
 # --- WARNING AND CONFIRMATION ---
 echo "" >&2
-echo "⚠️  WARNING: This will delete ALL VMs and their dependencies in resource group '$RESOURCE_GROUP_NAME'" >&2
-echo "   Resources to be deleted: VMs, NICs, Disks, Public IPs" >&2
-echo "   Resources preserved: Storage Accounts, Container Registries" >&2
+echo "⚠️  WARNING: This will DESTROY all Terraform-managed infrastructure!" >&2
+echo "   Resource group: ${AZURE_RESOURCE_GROUP}" >&2
+echo "   State backend: ${AZURE_BLOB_STORAGE}/${AZURE_BLOB_STORAGE_TF_STATE_CONTAINER}" >&2
 echo "" >&2
 echo "Press Ctrl+C within 10 seconds to cancel..." >&2
 for i in {10..1}; do
@@ -63,92 +104,30 @@ done
 printf "\r   Proceeding now...            \n" >&2
 echo "" >&2
 
-# --- VERIFY RESOURCE GROUP EXISTENCE ---
-echo "Verifying resource group existence..." >> "$LOG_FILE"
-if ! az group show --name "$RESOURCE_GROUP_NAME" --output none >> "$LOG_FILE" 2>&1; then
-    echo "❌ Error: Resource group '$RESOURCE_GROUP_NAME' does not exist or access denied" >&2
-    echo "ERROR: Resource group not found or access denied" >> "$LOG_FILE"
-    exit 1
-fi
-echo "Resource group '$RESOURCE_GROUP_NAME' verified" >> "$LOG_FILE"
-
-# --- CLEANUP LOGIC ---
-cleanup_vms_and_deps() {
-    echo "Deleting VMs and dependencies (excluding Storage Accounts and Container Registries)" >> "$LOG_FILE"
-    echo "Process runs multiple cleanup passes for reliability" >> "$LOG_FILE"
-
-    MAX_DELETION_PASSES=3
-    CURRENT_PASS=0
-
-    while [ $CURRENT_PASS -lt $MAX_DELETION_PASSES ]; do
-        CURRENT_PASS=$((CURRENT_PASS + 1))
-        echo "" >> "$LOG_FILE"
-        echo "--- Deletion Pass $CURRENT_PASS/$MAX_DELETION_PASSES ---" >> "$LOG_FILE"
-
-        # 1. Delete all VMs first (only in the first pass)
-        if [ $CURRENT_PASS -eq 1 ]; then
-            ALL_VMS_IN_RG=$(az vm list --resource-group "$RESOURCE_GROUP_NAME" --query "[].name" -o tsv 2>>"$LOG_FILE")
-            if [ -n "$ALL_VMS_IN_RG" ]; then
-                echo "Deleting Virtual Machines..." >> "$LOG_FILE"
-                for VM_NAME_TO_DELETE in $ALL_VMS_IN_RG; do
-                    echo "  - Deleting VM '$VM_NAME_TO_DELETE'" >> "$LOG_FILE"
-                    az vm delete --resource-group "$RESOURCE_GROUP_NAME" --name "$VM_NAME_TO_DELETE" --yes --no-wait >> "$LOG_FILE" 2>&1
-                done
-                echo "VM deletions initiated. Waiting 60 seconds..." >> "$LOG_FILE"
-                sleep 60
-            else
-                echo "No Virtual Machines found to delete" >> "$LOG_FILE"
-            fi
-        fi
-
-        # 2. List remaining resources (EXCLUDING Storage Accounts and ACRs)
-        REMAINING_RESOURCE_IDS_STR=$(az resource list \
-            --resource-group "$RESOURCE_GROUP_NAME" \
-            --query "[?type!=\`Microsoft.Storage/storageAccounts\` && type!=\`Microsoft.ContainerRegistry/registries\`].id" \
-            -o tsv 2>>"$LOG_FILE")
-
-        if [ -z "$REMAINING_RESOURCE_IDS_STR" ]; then
-            echo "No remaining non-excluded resources found in pass $CURRENT_PASS" >> "$LOG_FILE"
-            break
-        fi
-
-        # Count resources (Bash 3.2 compatible)
-        RESOURCES_COUNT=$(echo "$REMAINING_RESOURCE_IDS_STR" | wc -l | tr -d ' ')
-        echo "Pass $CURRENT_PASS - Found $RESOURCES_COUNT resources to clean (NICs, Disks, IPs, etc.)" >> "$LOG_FILE"
-
-        # 3. Delete remaining resources
-        echo "Deleting remaining dependencies..." >> "$LOG_FILE"
-        if [ -n "$REMAINING_RESOURCE_IDS_STR" ]; then
-            echo "$REMAINING_RESOURCE_IDS_STR" | xargs -n 1 -I {} az resource delete --ids {} --no-wait >> "$LOG_FILE" 2>&1
-        fi
-
-        echo "Deletions initiated. Waiting 5 seconds before next pass..." >> "$LOG_FILE"
-        sleep 5
-    done
-
-    echo "" >> "$LOG_FILE"
-    echo "---------------------- FINAL CLEANUP STATUS ----------------------" >> "$LOG_FILE"
-    FINAL_CLEANUP_STR=$(az resource list --resource-group "$RESOURCE_GROUP_NAME" --query "[?type!=\`Microsoft.Storage/storageAccounts\` && type!=\`Microsoft.ContainerRegistry/registries\`].id" -o tsv 2>>"$LOG_FILE")
-    if [ -z "$FINAL_CLEANUP_STR" ]; then
-        echo "VM and dependency cleanup complete" >> "$LOG_FILE"
-        return 0
-    else
-        echo "WARNING: Some resources could not be deleted" >> "$LOG_FILE"
-        return 1
-    fi
-}
-
-# --- EXECUTION ---
-# Temporarily disable exit-on-error to capture the exit code
+# --- TERRAFORM EXECUTION ---
+echo "🔄 Running terraform init..." >&2
 set +e
-cleanup_vms_and_deps
-CLEANUP_EXIT_CODE=$?
+(
+    terraform -chdir=terraform init "${BACKEND_CONFIG[@]}"
+) >> "$LOG_FILE" 2>&1
+INIT_EXIT_CODE=$?
+
+if [ $INIT_EXIT_CODE -ne 0 ]; then
+    echo "❌ Terraform init failed. Check $LOG_FILE for details." >&2
+    exit $INIT_EXIT_CODE
+fi
+
+echo "🗑️  Running terraform destroy..." >&2
+(
+    terraform -chdir=terraform destroy -auto-approve
+) >> "$LOG_FILE" 2>&1
+DESTROY_EXIT_CODE=$?
 set -e
 
 # --- FINAL STATUS ---
-if [ $CLEANUP_EXIT_CODE -eq 0 ]; then
-    echo "✅ Delete process completed successfully. Full log: $LOG_FILE" >&2
+if [ $DESTROY_EXIT_CODE -eq 0 ]; then
+    echo "✅ Terraform destroy completed successfully. Full log: $LOG_FILE" >&2
 else
-    echo "⚠️  Delete process completed with warnings. Check $LOG_FILE for details" >&2
-    exit $CLEANUP_EXIT_CODE
+    echo "❌ Terraform destroy FAILED (Exit Code: $DESTROY_EXIT_CODE). Check $LOG_FILE for details." >&2
+    exit $DESTROY_EXIT_CODE
 fi

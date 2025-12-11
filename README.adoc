@@ -63,8 +63,9 @@ This is useful for testing Helm-based Trento installations where manual Kubernet
 * Azure CLI (`az`) authenticated
 * SUSE registration credentials (email and registration code)
 * Bash 4.0+
+* SSH key pair (stored as content in `.env` file)
 
-NOTE: SSH keys are generated automatically at the start of each deployment. No manual SSH key setup is required.
+NOTE: You must provide SSH key content in the `.env` file using `PRIVATE_SSH_KEY_CONTENT` and `PUBLIC_SSH_KEY_CONTENT` variables. The same SSH key will be used for all VMs in the deployment.
 
 NOTE: The Azure region is hardcoded to `westeurope`. As we don't plan to use any other region.
 
@@ -134,12 +135,15 @@ ANSIBLE_PROJECT_PATH="/path/to/your/ansible/project"
 ANSIBLE_INVENTORIES_PATH="/path/to/inventories"
 ANSIBLE_VM_CERTS_PATH="/path/to/certs"
 
-# SSH Configuration
-SSH_USER="azureadm"
-
 # SUSE Registration
 SUSE_REGISTRATION_EMAIL="your-email@example.com"
 SUSE_REGISTRATION_CODE="your-registration-code"
+
+# SSH Key Configuration (required)
+PRIVATE_SSH_KEY_CONTENT="-----BEGIN OPENSSH PRIVATE KEY-----
+...your private key content here...
+-----END OPENSSH PRIVATE KEY-----"
+PUBLIC_SSH_KEY_CONTENT="ssh-ed25519 AAAA...your public key content here..."
 ----
 
 === Machine Configuration (.machines.conf.csv)
@@ -173,8 +177,8 @@ FQDN format: `<prefix><slesVersion>sp<spVersion><suffix>.<AZURE_VMS_LOCATION>.cl
 
 The automation runs these stages sequentially:
 
-. **SSH Key Setup** - Sets up fresh ephemeral SSH keys for the deployment
-. **Terraform Provisioning** - Creates Azure VMs using the generated SSH keys
+. **SSH Key Setup** - Writes SSH keys from `.env` to `.ssh-keys/` directory and clears old host keys
+. **Terraform Provisioning** - Creates Azure VMs using the SSH keys from `.env`
 . **Machine Setup** - Registers SUSE systems and configures repositories (parallel execution)
 . **SSL Certificate Generation** - Creates self-signed certificates for each VM
 . **Ansible Inventory Generation** - Creates inventory files for Ansible
@@ -241,7 +245,7 @@ To clean up local generated files without destroying Azure infrastructure:
 rm -rf certs .venv-ansible inventories logs .ssh-keys
 ----
 
-NOTE: The `.ssh-keys/` directory contains automatically generated SSH keys used for VM access. These keys are specific to each deployment and can be safely removed after cleanup.
+NOTE: The `.ssh-keys/` directory contains SSH keys written from your `.env` file for VM access. These can be safely removed after cleanup as they can be regenerated from the `.env` file.
 
 == Logs
 

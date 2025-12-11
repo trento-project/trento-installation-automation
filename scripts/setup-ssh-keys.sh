@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
 
 # ==============================================================================
-# Generate SSH Keys
+# Setup SSH Keys
 # ==============================================================================
-# Generates an ephemeral SSH key-pair for VM access during the deployment.
-# The key-pair is stored in the .ssh-keys directory and will be used by
-# Terraform for VM provisioning and by other scripts for SSH access.
+# Sets up SSH keys for VM access during deployment. Uses keys from .env file
+# (PRIVATE_SSH_KEY_CONTENT and PUBLIC_SSH_KEY_CONTENT) and writes them to the
+# .ssh-keys directory.
 #
 # Also clears old host keys from ~/.ssh/known_hosts for all VMs defined in
 # .machines.conf.csv to prevent SSH host key verification failures when VMs
 # are recreated.
 #
 # Inputs:
-#   - .env: Environment configuration file (for AZURE_VMS_LOCATION)
+#   - .env: Environment configuration file (required)
+#     - PRIVATE_SSH_KEY_CONTENT: SSH private key content
+#     - PUBLIC_SSH_KEY_CONTENT: SSH public key content
+#     - AZURE_VMS_LOCATION (optional): Azure region for FQDNs
 #   - .machines.conf.csv: VM definitions
 # Outputs:
-#   - .ssh-keys/id_ed25519: Private key
-#   - .ssh-keys/id_ed25519.pub: Public key
+#   - .ssh-keys/id_ed25519: Private key (from .env)
+#   - .ssh-keys/id_ed25519.pub: Public key (from .env)
 # ==============================================================================
 
 # --- BASH CONFIGURATION ---
@@ -31,16 +34,17 @@ SSH_KEYS_DIR="$PROJECT_ROOT/.ssh-keys"
 PRIVATE_KEY_PATH="$SSH_KEYS_DIR/id_ed25519"
 PUBLIC_KEY_PATH="$SSH_KEYS_DIR/id_ed25519.pub"
 
-# --- LOAD ENVIRONMENT VARIABLES ---
-if [ -f "$ENV_FILE" ]; then
-    set -a
-    source "$ENV_FILE"
-    set +a
-    AZURE_VMS_LOCATION="${AZURE_VMS_LOCATION:-westeurope}"
-else
-    echo "⚠️  Warning: .env file not found, using default location: westeurope" >&2
-    AZURE_VMS_LOCATION="westeurope"
+# --- VALIDATE ENVIRONMENT FILE ---
+if [ ! -f "$ENV_FILE" ]; then
+    echo "❌ Error: .env file not found at $ENV_FILE" >&2
+    exit 1
 fi
+
+# --- LOAD ENVIRONMENT VARIABLES ---
+set -a
+source "$ENV_FILE"
+set +a
+AZURE_VMS_LOCATION="${AZURE_VMS_LOCATION:-westeurope}"
 
 # --- CLEAR OLD HOST KEYS FROM known_hosts ---
 echo "🧹 Clearing old host keys from ~/.ssh/known_hosts..." >&2
@@ -95,18 +99,28 @@ fi
 
 mkdir -p "$SSH_KEYS_DIR"
 
-# --- GENERATE SSH KEY-PAIR ---
-echo "🔑 Generating fresh ephemeral SSH key-pair..." >&2
+# --- SETUP SSH KEY-PAIR FROM .ENV ---
+echo "🔑 Setting up SSH keys from .env file..." >&2
 
-ssh-keygen -t ed25519 -f "$PRIVATE_KEY_PATH" -N "" -C "trento-automation-$(date +%Y%m%d)" >/dev/null 2>&1
-
-if [ $? -eq 0 ]; then
-    chmod 600 "$PRIVATE_KEY_PATH"
-    chmod 644 "$PUBLIC_KEY_PATH"
-    echo "✅ SSH key-pair generated successfully" >&2
-    echo "   Private key: $PRIVATE_KEY_PATH" >&2
-    echo "   Public key:  $PUBLIC_KEY_PATH" >&2
-else
-    echo "❌ Failed to generate SSH keys" >&2
+# Validate that SSH key variables are set
+if [ -z "${PRIVATE_SSH_KEY_CONTENT:-}" ]; then
+    echo "❌ Error: PRIVATE_SSH_KEY_CONTENT is not set in .env file" >&2
     exit 1
 fi
+
+if [ -z "${PUBLIC_SSH_KEY_CONTENT:-}" ]; then
+    echo "❌ Error: PUBLIC_SSH_KEY_CONTENT is not set in .env file" >&2
+    exit 1
+fi
+
+# Write private key to file
+echo "$PRIVATE_SSH_KEY_CONTENT" > "$PRIVATE_KEY_PATH"
+chmod 600 "$PRIVATE_KEY_PATH"
+
+# Write public key to file
+echo "$PUBLIC_SSH_KEY_CONTENT" > "$PUBLIC_KEY_PATH"
+chmod 644 "$PUBLIC_KEY_PATH"
+
+echo "✅ SSH key-pair created from .env successfully" >&2
+echo "   Private key: $PRIVATE_KEY_PATH" >&2
+echo "   Public key:  $PUBLIC_KEY_PATH" >&2
