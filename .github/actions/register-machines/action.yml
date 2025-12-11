@@ -29,6 +29,11 @@ runs:
         echo "${{ inputs.private_ssh_key_content }}" > "${SSH_KEY_PATH}"
         chmod 600 "${SSH_KEY_PATH}"
 
+        # Setup logs directory
+        LOGS_DIR="machine-logs"
+        mkdir -p "${LOGS_DIR}"
+        echo "📁 Created logs directory: ${LOGS_DIR}"
+
         # Query Azure location from resource group
         echo "🔍 Querying location from resource group: ${{ inputs.azure_resource_group }}"
         AZURE_LOCATION=$(az group show --name "${{ inputs.azure_resource_group }}" --query location -o tsv)
@@ -46,47 +51,48 @@ runs:
         register_machine() {
           local FQDN=$1
           local VM_NAME=$2
+          local LOG_FILE="${LOGS_DIR}/${VM_NAME}.log"
 
-          echo "🛠️  Registering $VM_NAME at $FQDN"
+          echo "🛠️  Registering $VM_NAME at $FQDN" | tee -a "$LOG_FILE"
 
           # Wait for SSH port availability
-          echo "⏳ Waiting for SSH port (22) on $FQDN..."
+          echo "⏳ Waiting for SSH port (22) on $FQDN..." | tee -a "$LOG_FILE"
           local max_attempts=20
           local attempt=1
           while ! nc -z -w 5 "$FQDN" 22; do
             if [ "$attempt" -ge "$max_attempts" ]; then
-              echo "❌ SSH port not reachable after $attempt attempts on $FQDN"
+              echo "❌ SSH port not reachable after $attempt attempts on $FQDN" | tee -a "$LOG_FILE"
               return 1
             fi
-            echo "   Attempt $attempt: Port 22 still closed, waiting 10s..."
+            echo "   Attempt $attempt: Port 22 still closed, waiting 10s..." | tee -a "$LOG_FILE"
             attempt=$((attempt+1))
             sleep 10
           done
-          echo "✅ SSH port is available on $FQDN"
+          echo "✅ SSH port is available on $FQDN" | tee -a "$LOG_FILE"
 
           # Wait for SSH login readiness
-          echo "⏳ Waiting for SSH login to be permitted on $FQDN..."
+          echo "⏳ Waiting for SSH login to be permitted on $FQDN..." | tee -a "$LOG_FILE"
           local login_max_attempts=15
           local login_attempt=1
           while ! ssh -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$USER@$FQDN" true 2>/dev/null; do
             if [ "$login_attempt" -ge "$login_max_attempts" ]; then
-              echo "❌ SSH login not permitted after $login_attempt attempts on $FQDN"
+              echo "❌ SSH login not permitted after $login_attempt attempts on $FQDN" | tee -a "$LOG_FILE"
               return 1
             fi
-            echo "   Login attempt $login_attempt: Still booting, waiting 15s..."
+            echo "   Login attempt $login_attempt: Still booting, waiting 15s..." | tee -a "$LOG_FILE"
             login_attempt=$((login_attempt+1))
             sleep 15
           done
-          echo "✅ SSH login is now permitted on $FQDN"
+          echo "✅ SSH login is now permitted on $FQDN" | tee -a "$LOG_FILE"
 
           # Register with SUSEConnect
-          echo "🔑 Registering $VM_NAME with SUSEConnect..."
+          echo "🔑 Registering $VM_NAME with SUSEConnect..." | tee -a "$LOG_FILE"
           if ssh -o StrictHostKeyChecking=accept-new -i "$SSH_KEY_PATH" "$USER@$FQDN" \
-            "sudo SUSEConnect -r '${{ inputs.suse_registration_code }}' -e '${{ inputs.suse_registration_email }}'" 2>&1; then
-            echo "✅ Successfully registered $VM_NAME"
+            "sudo SUSEConnect -r '${{ inputs.suse_registration_code }}' -e '${{ inputs.suse_registration_email }}'" 2>&1 | tee -a "$LOG_FILE"; then
+            echo "✅ Successfully registered $VM_NAME" | tee -a "$LOG_FILE"
             return 0
           else
-            echo "⚠️  Registration failed or already completed for $VM_NAME"
+            echo "⚠️  Registration failed or already completed for $VM_NAME" | tee -a "$LOG_FILE"
             return 0
           fi
         }
@@ -137,3 +143,9 @@ runs:
         fi
 
         echo "✅ All machines registered successfully"
+
+        # Log summary
+        if [ -d "${LOGS_DIR}" ] && [ "$(ls -A ${LOGS_DIR})" ]; then
+          LOG_COUNT=$(ls -1 "${LOGS_DIR}"/*.log 2>/dev/null | wc -l)
+          echo "📝 Generated ${LOG_COUNT} machine log file(s) in ${LOGS_DIR}/"
+        fi

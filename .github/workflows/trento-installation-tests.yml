@@ -101,6 +101,15 @@ jobs:
           suse_registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
           azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
 
+      - name: Upload machine logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: machine-registration-logs
+          path: machine-logs/
+          if-no-files-found: warn
+          retention-days: 1
+
   destroy:
     name: Terraform Destroy
     runs-on: ubuntu-24.04
