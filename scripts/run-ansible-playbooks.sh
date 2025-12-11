@@ -119,17 +119,23 @@ if [ ! -f "$PLAYBOOK_FILE" ]; then
 fi
 
 # --- CONFIGURE SSH KEY FOR ANSIBLE ---
-SSH_KEYS_DIR="$PROJECT_ROOT/.ssh-keys"
-SSH_PRIVATE_KEY_PATH="${SSH_PRIVATE_KEY_PATH:-$SSH_KEYS_DIR/id_ed25519}"
-
-if [ ! -f "$SSH_PRIVATE_KEY_PATH" ]; then
-    echo "❌ Error: SSH private key not found at $SSH_PRIVATE_KEY_PATH" >&2
-    echo "   Run ./scripts/setup-ssh-keys.sh or ./scripts/run-terraform.sh first" >&2
+# Validate SSH key from .env
+if [ -z "${PRIVATE_SSH_KEY_CONTENT:-}" ]; then
+    echo "❌ Error: PRIVATE_SSH_KEY_CONTENT is not set in .env file" >&2
+    echo "   Please set PRIVATE_SSH_KEY_CONTENT and PUBLIC_SSH_KEY_CONTENT in .env" >&2
     exit 1
 fi
 
+# Setup SSH key from .env
+SSH_KEYS_DIR="$PROJECT_ROOT/.ssh-keys"
+SSH_PRIVATE_KEY_PATH="$SSH_KEYS_DIR/id_ed25519"
+
+mkdir -p "$SSH_KEYS_DIR"
+echo "$PRIVATE_SSH_KEY_CONTENT" > "$SSH_PRIVATE_KEY_PATH"
+chmod 600 "$SSH_PRIVATE_KEY_PATH"
+
 export ANSIBLE_PRIVATE_KEY_FILE="$SSH_PRIVATE_KEY_PATH"
-echo "✅ Using SSH private key: $SSH_PRIVATE_KEY_PATH" >&2
+echo "✅ Using SSH private key from .env" >&2
 
 # --- EXECUTE ANSIBLE PLAYBOOK ---
 echo "" >&2

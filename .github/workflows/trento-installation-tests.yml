@@ -1,6 +1,9 @@
 name: Trento Installation Tests
 
 on:
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       destroy_after:
@@ -33,16 +36,6 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Generate Ephemeral SSH Key for Runner
-        id: ssh-key
-        working-directory: .
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C "github-runner-ephemeral-$(date +%Y%m%d)"
-          chmod 600 ~/.ssh/id_ed25519
-          echo "public_key=$(cat ~/.ssh/id_ed25519.pub)" >> $GITHUB_OUTPUT
-          echo "✅ Ephemeral SSH key generated for runner automation"
 
       - name: Extract Azure Credentials
         id: azure-creds
@@ -99,9 +92,7 @@ jobs:
         env:
           TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
           TF_VAR_azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
-          TF_VAR_ssh_public_key_content: ${{ steps.ssh-key.outputs.public_key }}
-          TF_VAR_debug_ssh_public_key: ${{ vars.DEBUG_SSH_PUBLIC_KEY }}
-          TF_VAR_ssh_user: ${{ vars.SSH_USER }}
+          TF_VAR_ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
 
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan

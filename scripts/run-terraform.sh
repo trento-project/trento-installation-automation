@@ -38,33 +38,51 @@ mkdir -p "$LOGS_DIR"
 echo "⚙️  Starting Terraform execution..." >&2
 echo "--- $(date) ---" >> "$LOG_FILE"
 
-# --- LOAD SSH KEYS ---
+# --- LOAD .ENV FILE FIRST ---
+# Load .env to get SSH key content and other variables (handles multi-line values)
+set -a
+source "$ENV_FILE"
+set +a
+
+# --- VALIDATE SSH KEYS FROM .ENV ---
+if [ -z "${PUBLIC_SSH_KEY_CONTENT:-}" ]; then
+    echo "❌ Error: PUBLIC_SSH_KEY_CONTENT is not set in .env file" >&2
+    echo "   Please set PRIVATE_SSH_KEY_CONTENT and PUBLIC_SSH_KEY_CONTENT in .env" >&2
+    exit 1
+fi
+
+if [ -z "${PRIVATE_SSH_KEY_CONTENT:-}" ]; then
+    echo "❌ Error: PRIVATE_SSH_KEY_CONTENT is not set in .env file" >&2
+    echo "   Please set PRIVATE_SSH_KEY_CONTENT and PUBLIC_SSH_KEY_CONTENT in .env" >&2
+    exit 1
+fi
+
+# --- SETUP SSH KEYS ---
+# Use keys from .env and write to .ssh-keys directory for SSH access
 SSH_KEYS_DIR="$PROJECT_ROOT/.ssh-keys"
 SSH_PRIVATE_KEY_PATH="$SSH_KEYS_DIR/id_ed25519"
 SSH_PUBLIC_KEY_PATH="$SSH_KEYS_DIR/id_ed25519.pub"
 
-if [ ! -f "$SSH_PUBLIC_KEY_PATH" ]; then
-    echo "❌ Error: SSH public key not found at $SSH_PUBLIC_KEY_PATH" >&2
-    echo "   Run ./scripts/setup-ssh-keys.sh first" >&2
-    exit 1
-fi
+mkdir -p "$SSH_KEYS_DIR"
+echo "$PRIVATE_SSH_KEY_CONTENT" > "$SSH_PRIVATE_KEY_PATH"
+chmod 600 "$SSH_PRIVATE_KEY_PATH"
+echo "$PUBLIC_SSH_KEY_CONTENT" > "$SSH_PUBLIC_KEY_PATH"
+chmod 644 "$SSH_PUBLIC_KEY_PATH"
 
 export SSH_PRIVATE_KEY_PATH
-export SSH_PUBLIC_KEY_CONTENT="$(cat "$SSH_PUBLIC_KEY_PATH")"
-echo "✅ Using SSH keys from $SSH_KEYS_DIR" >&2
+echo "✅ Using SSH keys from .env" >&2
 
-# --- LOAD ENVIRONMENT VARIABLES ---
-echo "📦 Loading environment variables from $ENV_FILE..." >> "$LOG_FILE"
+# --- EXPORT TERRAFORM VARIABLES ---
+echo "📦 Exporting Terraform variables..." >> "$LOG_FILE"
 
-# Load .env and export both regular and Terraform-style vars
-while IFS= read -r line || [ -n "$line" ]; do
-    [[ -z "$line" || "$line" =~ ^# ]] && continue
-    eval "export $line"
-    key="$(echo "$line" | cut -d '=' -f1)"
-    lower_key="$(echo "$key" | tr '[:upper:]' '[:lower:]')"
-    tfvar_name="TF_VAR_${lower_key}"
-    eval "export $tfvar_name='${!key}'"
-done < "$ENV_FILE"
+# Export Terraform-style variables from already loaded .env
+# SSH keys
+export TF_VAR_ssh_private_key_path="$SSH_PRIVATE_KEY_PATH"
+export TF_VAR_ssh_public_key_content="$PUBLIC_SSH_KEY_CONTENT"
+
+# Azure configuration
+export TF_VAR_azure_resource_group="${AZURE_RESOURCE_GROUP}"
+export TF_VAR_azure_owner_tag="${AZURE_OWNER_TAG}"
 
 echo "✅ Environment variables loaded. Running: terraform $*" >> "$LOG_FILE"
 
@@ -78,31 +96,7 @@ if [ -z "$ARM_SUBSCRIPTION_ID" ]; then
 fi
 export ARM_SUBSCRIPTION_ID
 echo "✅ ARM_SUBSCRIPTION_ID set to: $ARM_SUBSCRIPTION_ID" >> "$LOG_FILE"
-
-# --- EXPORT SSH KEYS AS TERRAFORM VARIABLES ---
-export TF_VAR_ssh_private_key_path="$SSH_PRIVATE_KEY_PATH"
-export TF_VAR_ssh_public_key_content="$SSH_PUBLIC_KEY_CONTENT"
-
-# Export debugging public key if explicitly configured and exists
-if [ -n "${DEBUG_SSH_PUBLIC_KEY_PATH:-}" ]; then
-    # Expand tilde in path
-    EXPANDED_DEBUG_KEY_PATH="${DEBUG_SSH_PUBLIC_KEY_PATH/#\~/$HOME}"
-    if [ -f "${EXPANDED_DEBUG_KEY_PATH}.pub" ]; then
-        export TF_VAR_debug_ssh_public_key="$(cat "${EXPANDED_DEBUG_KEY_PATH}.pub")"
-        echo "✅ Debugging SSH public key exported from ${EXPANDED_DEBUG_KEY_PATH}.pub" >> "$LOG_FILE"
-        echo "   VMs will have both ephemeral key (for automation) and debugging key (for manual access)" >> "$LOG_FILE"
-    else
-        export TF_VAR_debug_ssh_public_key=""
-        echo "⚠️  DEBUG_SSH_PUBLIC_KEY_PATH set but ${EXPANDED_DEBUG_KEY_PATH}.pub not found" >> "$LOG_FILE"
-        echo "   VMs will only have ephemeral key" >> "$LOG_FILE"
-    fi
-else
-    export TF_VAR_debug_ssh_public_key=""
-    echo "ℹ️  No DEBUG_SSH_PUBLIC_KEY_PATH configured, using only ephemeral key" >> "$LOG_FILE"
-    echo "   You can SSH with: ssh -i .ssh-keys/id_ed25519 $SSH_USER@<vm-fqdn>" >> "$LOG_FILE"
-fi
-
-echo "✅ SSH keys exported as Terraform variables" >> "$LOG_FILE"
+echo "   You can SSH with: ssh -i .ssh-keys/id_ed25519 cloudadmin@<vm-fqdn>" >> "$LOG_FILE"
 
 # --- TERRAFORM BACKEND CONFIGURATION ---
 # Build backend config flags for Azure Storage (same as GitHub workflow)

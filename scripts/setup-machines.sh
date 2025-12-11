@@ -55,23 +55,23 @@ if [ ! -f "$MACHINES_CSV" ]; then
     exit 1
 fi
 
-# --- VALIDATE REQUIRED VARIABLES ---
-if [ -z "${SSH_USER:-}" ]; then
-    echo "❌ Error: SSH_USER variable is not defined in .env" >&2
+# --- VALIDATE SSH KEYS FROM .ENV ---
+if [ -z "${PRIVATE_SSH_KEY_CONTENT:-}" ]; then
+    echo "❌ Error: PRIVATE_SSH_KEY_CONTENT is not set in .env file" >&2
+    echo "   Please set PRIVATE_SSH_KEY_CONTENT and PUBLIC_SSH_KEY_CONTENT in .env" >&2
     exit 1
 fi
 
-# --- USE GENERATED SSH KEYS ---
+# --- SETUP SSH KEYS ---
+# Use keys from .env and write to .ssh-keys directory for SSH access
 SSH_KEYS_DIR="$PROJECT_ROOT/.ssh-keys"
-SSH_PRIVATE_KEY_PATH="${SSH_PRIVATE_KEY_PATH:-$SSH_KEYS_DIR/id_ed25519}"
+SSH_PRIVATE_KEY_PATH="$SSH_KEYS_DIR/id_ed25519"
 
-if [ ! -f "$SSH_PRIVATE_KEY_PATH" ]; then
-    echo "❌ Error: SSH private key not found at $SSH_PRIVATE_KEY_PATH" >&2
-    echo "   Run ./scripts/setup-ssh-keys.sh first" >&2
-    exit 1
-fi
+mkdir -p "$SSH_KEYS_DIR"
+echo "$PRIVATE_SSH_KEY_CONTENT" > "$SSH_PRIVATE_KEY_PATH"
+chmod 600 "$SSH_PRIVATE_KEY_PATH"
 
-echo "✅ Using SSH private key: $SSH_PRIVATE_KEY_PATH" >&2
+echo "✅ Using SSH private key from .env" >&2
 
 # --- SETUP LOGGING ---
 mkdir -p "$LOGS_DIR"
@@ -84,7 +84,7 @@ grep -v '^$' "$MACHINES_CSV" > "$TEMP_MACHINES_FILE"
 initialize_vm() {
     local FULL_FQDN=$1
     local VM_NAME_BASE=$2
-    local USER="$SSH_USER"
+    local USER="cloudadmin"
     local FQDN="$FULL_FQDN"
 
     echo "🛠️  Starting initialization: $VM_NAME_BASE (Log: $LOGS_DIR/${VM_NAME_BASE}.log)"
@@ -197,7 +197,7 @@ EOF_REMOTE
 initialize_vm_sles16() {
     local FULL_FQDN=$1
     local VM_NAME_BASE=$2
-    local USER="$SSH_USER"
+    local USER="cloudadmin"
     local FQDN="$FULL_FQDN"
 
     echo "🛠️  Starting SLES 16+ initialization: $VM_NAME_BASE (Log: $LOGS_DIR/${VM_NAME_BASE}.log)"
@@ -256,7 +256,7 @@ EOF_REMOTE
 initialize_vm_helm() {
     local FULL_FQDN=$1
     local VM_NAME_BASE=$2
-    local USER="$SSH_USER"
+    local USER="cloudadmin"
     local FQDN="$FULL_FQDN"
 
     echo "🛠️  Starting Helm VM initialization (registration only): $VM_NAME_BASE (Log: $LOGS_DIR/${VM_NAME_BASE}.log)"
