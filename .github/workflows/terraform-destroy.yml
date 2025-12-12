@@ -24,3 +24,4 @@ jobs:
           azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
           azure_blob_storage: ${{ vars.AZURE_BLOB_STORAGE }}
           azure_blob_storage_container: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
+          ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
