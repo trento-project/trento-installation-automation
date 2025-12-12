@@ -19,6 +19,10 @@ jobs:
     name: Terraform Plan & Apply
     runs-on: ubuntu-24.04
 
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      location: ${{ steps.azure-location.outputs.location }}
+
     permissions:
       contents: read
 
@@ -93,27 +97,56 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
 
-      - name: Register machines with SUSEConnect
-        uses: ./.github/actions/register-machines
-        with:
-          private_ssh_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          suse_registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
-          suse_registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
-          azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+      - name: Get Azure location
+        id: azure-location
+        run: |
+          AZURE_LOCATION=$(az group show --name "${{ vars.AZURE_RESOURCE_GROUP }}" --query location -o tsv)
+          echo "location=$AZURE_LOCATION" >> $GITHUB_OUTPUT
+          echo "Using location: $AZURE_LOCATION"
 
-      - name: Upload machine logs as artifact
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Generate machine matrix from CSV
+        id: set-matrix
+        run: |
+          matrix=$(tail -n +2 .machines.conf.csv | grep -v '^[[:space:]]*$' | while IFS=, read -r prefix slesVersion spVersion suffix; do
+            prefix=$(echo "$prefix" | tr -d '\r' | xargs)
+            slesVersion=$(echo "$slesVersion" | tr -d '\r' | xargs)
+            spVersion=$(echo "$spVersion" | tr -d '\r' | xargs)
+            suffix=$(echo "$suffix" | tr -d '\r' | xargs)
+
+            if [ -n "$prefix" ]; then
+              vm_name="${prefix}${slesVersion}sp${spVersion}${suffix}"
+              echo "{\"name\":\"$vm_name\"}"
+            fi
+          done | jq -s -c '.')
+
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "Generated matrix for ${#matrix[@]} machines"
+
+  register:
+    name: Register ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    needs: terraform
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.terraform.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - name: Register ${{ matrix.name }} with SUSEConnect
+        uses: appleboy/ssh-action@master
         with:
-          name: machine-registration-logs
-          path: machine-logs/
-          if-no-files-found: warn
-          retention-days: 1
+          host: ${{ matrix.name }}.${{ needs.terraform.outputs.location }}.cloudapp.azure.com
+          username: cloudadmin
+          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          script: |
+            sudo SUSEConnect -r '${{ secrets.SUSE_REGISTRATION_CODE }}' -e '${{ secrets.SUSE_REGISTRATION_EMAIL }}'
+          timeout: 60s
+          command_timeout: 120s
 
   destroy:
     name: Terraform Destroy
     runs-on: ubuntu-24.04
-    needs: terraform
+    needs: [terraform, register]
     if: inputs.destroy_after
 
     steps:
