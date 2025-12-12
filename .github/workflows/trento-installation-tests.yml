@@ -20,7 +20,6 @@ jobs:
     runs-on: ubuntu-24.04
 
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
       location: ${{ steps.azure-location.outputs.location }}
 
     permissions:
@@ -134,16 +133,44 @@ jobs:
             exit 1
           fi
 
-          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          # Save to file to avoid GitHub secret scanning on outputs
+          echo "$matrix" > matrix.json
           echo "Generated matrix for $(echo "$matrix" | jq 'length') machines"
+
+      - name: Upload matrix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: matrix
+          path: terraform/matrix.json
+          retention-days: 1
+
+  prepare-matrix:
+    name: Prepare Matrix
+    runs-on: ubuntu-24.04
+    needs: terraform
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+
+    steps:
+      - name: Download matrix artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: matrix
+
+      - name: Read and output matrix
+        id: set-matrix
+        run: |
+          matrix=$(cat matrix.json)
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "Matrix contains $(echo "$matrix" | jq 'length') machines"
 
   register:
     name: Register ${{ matrix.name }}
     runs-on: ubuntu-24.04
-    needs: terraform
+    needs: [terraform, prepare-matrix]
     strategy:
       matrix:
-        include: ${{ fromJson(needs.terraform.outputs.matrix) }}
+        include: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
       fail-fast: false
 
     steps:
