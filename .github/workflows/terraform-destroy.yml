@@ -4,6 +4,10 @@ name: Azure Cleanup
 on:
   workflow_dispatch:
 
+env:
+  AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
+  AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
+
 jobs:
   terraform-destroy:
     name: Terraform Destroy
@@ -16,6 +20,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Parse tool versions
+        uses: endorama/asdf-parse-tool-versions@v1
+
       - name: Run Terraform Destroy
         uses: ./.github/actions/terraform-destroy
         with:
@@ -24,4 +31,5 @@ jobs:
           azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
           azure_blob_storage: ${{ vars.AZURE_BLOB_STORAGE }}
           azure_blob_storage_container: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
           ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
