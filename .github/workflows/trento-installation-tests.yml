@@ -107,8 +107,8 @@ jobs:
         id: set-matrix
         uses: ./.github/actions/generate-machine-matrix
         with:
-          csv_file: ../.machines.conf.csv
-          output_file: matrix.json
+          csv_file: .machines.conf.csv
+          output_file: terraform/matrix.json
 
       - name: Upload matrix artifact
         uses: actions/upload-artifact@v4
