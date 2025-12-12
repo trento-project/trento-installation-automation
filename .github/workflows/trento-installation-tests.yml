@@ -105,37 +105,10 @@ jobs:
 
       - name: Generate machine matrix from CSV
         id: set-matrix
-        run: |
-          CSV_FILE="../.machines.conf.csv"
-
-          # Check if CSV file exists
-          if [ ! -f "$CSV_FILE" ]; then
-            echo "Error: $CSV_FILE does not exist"
-            exit 1
-          fi
-
-          # Generate matrix from CSV
-          matrix=$(tail -n +2 "$CSV_FILE" | grep -v '^[[:space:]]*$' | while IFS=, read -r prefix slesVersion spVersion suffix; do
-            prefix=$(echo "$prefix" | tr -d '\r' | xargs)
-            slesVersion=$(echo "$slesVersion" | tr -d '\r' | xargs)
-            spVersion=$(echo "$spVersion" | tr -d '\r' | xargs)
-            suffix=$(echo "$suffix" | tr -d '\r' | xargs)
-
-            if [ -n "$prefix" ]; then
-              vm_name="${prefix}${slesVersion}sp${spVersion}${suffix}"
-              echo "{\"name\":\"$vm_name\"}"
-            fi
-          done | jq -s -c '.')
-
-          # Check if matrix is empty
-          if [ "$matrix" = "[]" ] || [ -z "$matrix" ]; then
-            echo "Error: No machines found in $CSV_FILE"
-            exit 1
-          fi
-
-          # Save to file to avoid GitHub secret scanning on outputs
-          echo "$matrix" > matrix.json
-          echo "Generated matrix for $(echo "$matrix" | jq 'length') machines"
+        uses: ./.github/actions/generate-machine-matrix
+        with:
+          csv_file: ../.machines.conf.csv
+          output_file: matrix.json
 
       - name: Upload matrix artifact
         uses: actions/upload-artifact@v4
