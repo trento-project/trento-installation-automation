@@ -107,7 +107,16 @@ jobs:
       - name: Generate machine matrix from CSV
         id: set-matrix
         run: |
-          matrix=$(tail -n +2 .machines.conf.csv | grep -v '^[[:space:]]*$' | while IFS=, read -r prefix slesVersion spVersion suffix; do
+          CSV_FILE="../.machines.conf.csv"
+
+          # Check if CSV file exists
+          if [ ! -f "$CSV_FILE" ]; then
+            echo "Error: $CSV_FILE does not exist"
+            exit 1
+          fi
+
+          # Generate matrix from CSV
+          matrix=$(tail -n +2 "$CSV_FILE" | grep -v '^[[:space:]]*$' | while IFS=, read -r prefix slesVersion spVersion suffix; do
             prefix=$(echo "$prefix" | tr -d '\r' | xargs)
             slesVersion=$(echo "$slesVersion" | tr -d '\r' | xargs)
             spVersion=$(echo "$spVersion" | tr -d '\r' | xargs)
@@ -119,8 +128,14 @@ jobs:
             fi
           done | jq -s -c '.')
 
+          # Check if matrix is empty
+          if [ "$matrix" = "[]" ] || [ -z "$matrix" ]; then
+            echo "Error: No machines found in $CSV_FILE"
+            exit 1
+          fi
+
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
-          echo "Generated matrix for ${#matrix[@]} machines"
+          echo "Generated matrix for $(echo "$matrix" | jq 'length') machines"
 
   register:
     name: Register ${{ matrix.name }}
