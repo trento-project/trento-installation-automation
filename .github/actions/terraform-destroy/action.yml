@@ -2,27 +2,6 @@ name: 'Terraform Destroy'
 description: 'Destroy Terraform-managed infrastructure in Azure'
 
 inputs:
-  azure_credentials:
-    description: 'Azure credentials JSON'
-    required: true
-  azure_resource_group:
-    description: 'Azure resource group name'
-    required: true
-  azure_owner_tag:
-    description: 'Azure owner tag'
-    required: true
-  azure_blob_storage:
-    description: 'Azure storage account name for state'
-    required: true
-  azure_blob_storage_container:
-    description: 'Azure storage container name for state'
-    required: true
-  terraform_version:
-    description: 'Terraform version to use'
-    required: true
-  ssh_public_key_content:
-    description: 'SSH public key content for VM access'
-    required: true
   working_directory:
     description: 'Working directory for Terraform'
     required: false
@@ -34,18 +13,18 @@ runs:
     - name: Azure Login
       uses: azure/login@v2
       with:
-        creds: ${{ inputs.azure_credentials }}
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Extract Azure Credentials
       id: azure-creds
       uses: ./.github/actions/extract-azure-credentials
       with:
-        azure_credentials: ${{ inputs.azure_credentials }}
+        azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
-        terraform_version: ${{ inputs.terraform_version }}
+        terraform_version: ${{ env.TERRAFORM_VERSION }}
 
     - name: Terraform Init
       id: init
@@ -53,10 +32,10 @@ runs:
       working-directory: ${{ inputs.working_directory }}
       run: |
         terraform init \
-          -backend-config="storage_account_name=${{ inputs.azure_blob_storage }}" \
-          -backend-config="container_name=${{ inputs.azure_blob_storage_container }}" \
+          -backend-config="storage_account_name=${{ env.AZURE_BLOB_STORAGE }}" \
+          -backend-config="container_name=${{ env.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}" \
           -backend-config="key=terraform.tfstate" \
-          -backend-config="resource_group_name=${{ inputs.azure_resource_group }}" \
+          -backend-config="resource_group_name=${{ vars.AZURE_RESOURCE_GROUP }}" \
           -backend-config="client_id=${{ steps.azure-creds.outputs.client_id }}" \
           -backend-config="client_secret=${{ steps.azure-creds.outputs.client_secret }}" \
           -backend-config="tenant_id=${{ steps.azure-creds.outputs.tenant_id }}" \
@@ -78,7 +57,7 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working_directory }}
       env:
-        TF_VAR_azure_resource_group: ${{ inputs.azure_resource_group }}
-        TF_VAR_azure_owner_tag: ${{ inputs.azure_owner_tag }}
-        TF_VAR_ssh_public_key_content: ${{ inputs.ssh_public_key_content }}
+        TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+        TF_VAR_azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
+        TF_VAR_ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
       run: terraform destroy -auto-approve -input=false
