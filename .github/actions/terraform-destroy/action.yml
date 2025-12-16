@@ -10,6 +10,9 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Parse tool versions
+      uses: endorama/asdf-parse-tool-versions@v1
+
     - name: Azure Login
       uses: azure/login@v2
       with:

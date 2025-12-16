@@ -1,0 +1,78 @@
+name: 'Get Machine Hosts'
+description: 'Get a list of machine hostnames from a CSV configuration file'
+
+inputs:
+  csv_file:
+    description: 'Path to the CSV file containing machine configuration'
+    required: true
+    default: '.machines.conf.csv'
+  azure_resource_group:
+    description: 'Azure resource group name to query for location'
+    required: true
+
+outputs:
+  hosts_fqdn_list:
+    description: 'Space-separated list of machine FQDNs'
+    value: ${{ steps.generate.outputs.hosts_fqdn_list }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate host list from CSV
+      id: generate
+      shell: bash
+      run: |
+        CSV_FILE="${{ inputs.csv_file }}"
+        AZURE_RESOURCE_GROUP="${{ inputs.azure_resource_group }}"
+
+        # Check if CSV file exists
+        if [ ! -f "$CSV_FILE" ]; then
+          echo "Error: $CSV_FILE does not exist"
+          exit 1
+        fi
+
+        # Get Azure location
+        LOCATION=$(az group show --name "$AZURE_RESOURCE_GROUP" --query location -o tsv)
+        if [ -z "$LOCATION" ]; then
+          echo "Error: Could not retrieve location for resource group $AZURE_RESOURCE_GROUP"
+          exit 1
+        fi
+        echo "Using location: $LOCATION"
+
+        # Generate hostname list from CSV
+        hosts_array=()
+        while IFS=, read -r prefix slesVersion spVersion suffix; do
+          # Skip header and empty lines
+          if [ "$prefix" = "prefix" ] || [ -z "$prefix" ]; then
+            continue
+          fi
+
+          # Trim whitespace and carriage returns
+          prefix=$(echo "$prefix" | tr -d '\r' | xargs)
+          slesVersion=$(echo "$slesVersion" | tr -d '\r' | xargs)
+          spVersion=$(echo "$spVersion" | tr -d '\r' | xargs)
+          suffix=$(echo "$suffix" | tr -d '\r' | xargs)
+
+          if [ -n "$prefix" ]; then
+            vm_name="${prefix}${slesVersion}sp${spVersion}${suffix}"
+            hosts_array+=("$vm_name")
+          fi
+        done < "$CSV_FILE"
+
+        # Check if we found any hosts
+        if [ ${#hosts_array[@]} -eq 0 ]; then
+          echo "Error: No machines found in $CSV_FILE"
+          exit 1
+        fi
+
+        # Generate FQDN list with location
+        fqdn_array=()
+        for host in "${hosts_array[@]}"; do
+          fqdn_array+=("${host}.${LOCATION}.cloudapp.azure.com")
+        done
+        hosts_fqdn_list="${fqdn_array[*]}"
+
+        # Set output
+        echo "hosts_fqdn_list=$hosts_fqdn_list" >> $GITHUB_OUTPUT
+
+        echo "Generated FQDN list for ${#hosts_array[@]} machines"

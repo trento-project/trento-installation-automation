@@ -1,0 +1,85 @@
+name: 'Register SUSE Machines'
+description: 'Register SUSE machines with SUSEConnect via SSH'
+
+inputs:
+  hosts_fqdn_list:
+    description: 'Space-separated list of machine FQDNs to register'
+    required: true
+  ssh_private_key:
+    description: 'SSH private key for authentication'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+    default: 'cloudadmin'
+  registration_code:
+    description: 'SUSE registration code'
+    required: true
+  registration_email:
+    description: 'SUSE registration email'
+    required: true
+  connection_timeout:
+    description: 'SSH connection timeout in seconds'
+    required: false
+    default: '60'
+
+outputs:
+  registered_count:
+    description: 'Number of machines successfully registered'
+    value: ${{ steps.register.outputs.registered_count }}
+  failed_hosts:
+    description: 'List of hosts that failed to register'
+    value: ${{ steps.register.outputs.failed_hosts }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Register machines with SUSEConnect
+      id: register
+      shell: bash
+      run: |
+        HOSTS_FQDN_LIST="${{ inputs.hosts_fqdn_list }}"
+        SSH_USERNAME="${{ inputs.ssh_username }}"
+        CONNECTION_TIMEOUT="${{ inputs.connection_timeout }}"
+
+        # Write SSH key to file
+        mkdir -p ~/.ssh
+        echo "${{ inputs.ssh_private_key }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+
+        # Disable strict host key checking for cloud VMs
+        cat >> ~/.ssh/config <<EOF
+        Host *.cloudapp.azure.com
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+        EOF
+
+        # Track registration results
+        registered_count=0
+        failed_hosts=""
+
+        # Loop through each host and register
+        for host in $HOSTS_FQDN_LIST; do
+          echo "Registering $host..."
+
+          if ssh -o ConnectTimeout="$CONNECTION_TIMEOUT" "$SSH_USERNAME@$host" \
+              "sudo SUSEConnect -r '${{ inputs.registration_code }}' -e '${{ inputs.registration_email }}'"; then
+            echo "✓ Successfully registered $host"
+            ((registered_count++))
+          else
+            echo "✗ Failed to register $host"
+            failed_hosts="$failed_hosts $host"
+          fi
+        done
+
+        # Set outputs
+        echo "registered_count=$registered_count" >> $GITHUB_OUTPUT
+        echo "failed_hosts=$failed_hosts" >> $GITHUB_OUTPUT
+
+        # Check if any registrations failed
+        if [ -n "$failed_hosts" ]; then
+          echo "Error: Failed to register the following hosts:$failed_hosts"
+          exit 1
+        fi
+
+        echo "All machines registered successfully ($registered_count total)"

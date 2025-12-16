@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     outputs:
-      location: ${{ steps.azure-location.outputs.location }}
+      hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
 
     permissions:
       contents: read
@@ -95,67 +95,29 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
 
-      - name: Get Azure location
-        id: azure-location
-        run: |
-          AZURE_LOCATION=$(az group show --name "${{ vars.AZURE_RESOURCE_GROUP }}" --query location -o tsv)
-          echo "location=$AZURE_LOCATION" >> $GITHUB_OUTPUT
-          echo "Using location: $AZURE_LOCATION"
-
-      - name: Generate machine matrix from CSV
-        id: set-matrix
-        uses: ./.github/actions/generate-machine-matrix
+      - name: Get machine hosts from CSV
+        id: get-hosts
+        uses: ./.github/actions/get-machine-hosts
         with:
           csv_file: .machines.conf.csv
-          output_file: terraform/matrix.json
-
-      - name: Upload matrix artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: matrix
-          path: terraform/matrix.json
-          retention-days: 1
-
-  prepare-matrix:
-    name: Prepare Matrix
-    runs-on: ubuntu-24.04
-    needs: terraform
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-
-    steps:
-      - name: Download matrix artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: matrix
-
-      - name: Read and output matrix
-        id: set-matrix
-        run: |
-          matrix=$(cat matrix.json)
-          echo "matrix=$matrix" >> $GITHUB_OUTPUT
-          echo "Matrix contains $(echo "$matrix" | jq 'length') machines"
+          azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
 
   register:
-    name: Register ${{ matrix.name }}
+    name: Register Machines with SUSEConnect
     runs-on: ubuntu-24.04
-    needs: [terraform, prepare-matrix]
-    strategy:
-      matrix:
-        include: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
-      fail-fast: false
+    needs: terraform
 
     steps:
-      - name: Register ${{ matrix.name }} with SUSEConnect
-        uses: appleboy/ssh-action@master
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Register machines with SUSEConnect
+        uses: ./.github/actions/register-suse-machines
         with:
-          host: ${{ matrix.name }}.${{ needs.terraform.outputs.location }}.cloudapp.azure.com
-          username: cloudadmin
-          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          script: |
-            sudo SUSEConnect -r '${{ secrets.SUSE_REGISTRATION_CODE }}' -e '${{ secrets.SUSE_REGISTRATION_EMAIL }}'
-          timeout: 60s
-          command_timeout: 120s
+          hosts_fqdn_list: ${{ needs.terraform.outputs.hosts_fqdn_list }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
+          registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
 
   destroy:
     name: Terraform Destroy
@@ -166,9 +128,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Parse tool versions
-        uses: endorama/asdf-parse-tool-versions@v1
 
       - name: Terraform Destroy
         uses: ./.github/actions/terraform-destroy
