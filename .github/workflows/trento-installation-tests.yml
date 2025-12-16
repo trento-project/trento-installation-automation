@@ -131,3 +131,8 @@ jobs:
 
       - name: Terraform Destroy
         uses: ./.github/actions/terraform-destroy
+        with:
+          azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
+          azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
+          ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
