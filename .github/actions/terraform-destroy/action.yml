@@ -6,9 +6,6 @@ inputs:
     description: 'Working directory for Terraform'
     required: false
     default: './terraform'
-  azure_credentials:
-    description: 'Azure credentials JSON'
-    required: true
   azure_resource_group:
     description: 'Azure resource group name'
     required: true
@@ -18,23 +15,24 @@ inputs:
   ssh_public_key_content:
     description: 'SSH public key content'
     required: true
+  client_id:
+    description: 'Azure client ID'
+    required: true
+  client_secret:
+    description: 'Azure client secret'
+    required: true
+  tenant_id:
+    description: 'Azure tenant ID'
+    required: true
+  subscription_id:
+    description: 'Azure subscription ID'
+    required: true
 
 runs:
   using: 'composite'
   steps:
     - name: Parse tool versions
       uses: endorama/asdf-parse-tool-versions@v1
-
-    - name: Azure Login
-      uses: azure/login@v2
-      with:
-        creds: ${{ inputs.azure_credentials }}
-
-    - name: Extract Azure Credentials
-      id: azure-creds
-      uses: ./.github/actions/extract-azure-credentials
-      with:
-        azure_credentials: ${{ inputs.azure_credentials }}
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
@@ -51,10 +49,10 @@ runs:
           -backend-config="container_name=${{ env.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}" \
           -backend-config="key=terraform.tfstate" \
           -backend-config="resource_group_name=${{ inputs.azure_resource_group }}" \
-          -backend-config="client_id=${{ steps.azure-creds.outputs.client_id }}" \
-          -backend-config="client_secret=${{ steps.azure-creds.outputs.client_secret }}" \
-          -backend-config="tenant_id=${{ steps.azure-creds.outputs.tenant_id }}" \
-          -backend-config="subscription_id=${{ steps.azure-creds.outputs.subscription_id }}"
+          -backend-config="client_id=${{ inputs.client_id }}" \
+          -backend-config="client_secret=${{ inputs.client_secret }}" \
+          -backend-config="tenant_id=${{ inputs.tenant_id }}" \
+          -backend-config="subscription_id=${{ inputs.subscription_id }}"
 
     - name: Set ARM_SUBSCRIPTION_ID
       id: subscription
