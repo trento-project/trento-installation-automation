@@ -10,7 +10,6 @@ on:
         default: true
 
 env:
-  WORKING_DIR: './terraform'
   AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
   AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
 
@@ -18,9 +17,6 @@ jobs:
   trento-installation-tests:
     name: Trento Installation Tests
     runs-on: ubuntu-24.04
-
-    outputs:
-      hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
 
     permissions:
       contents: read
@@ -127,7 +123,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: register-job-logs
+          name: logs
           path: logs/
           if-no-files-found: warn
           retention-days: 1
