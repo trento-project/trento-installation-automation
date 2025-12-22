@@ -14,8 +14,8 @@ env:
   AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
 
 jobs:
-  terraform:
-    name: Terraform Plan & Apply
+  trento-installation-tests:
+    name: Trento Installation Tests
     runs-on: ubuntu-24.04
 
     outputs:
@@ -40,6 +40,9 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           chmod 644 ~/.ssh/id_rsa.pub
           ssh-keyscan -H *.cloudapp.azure.com >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Create logs directory
+        run: mkdir -p logs
 
       - name: Azure Login
         uses: azure/login@v2
@@ -111,30 +114,11 @@ jobs:
           csv_file: .machines.conf.csv
           azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
 
-  register:
-    name: Register Machines with SUSEConnect
-    runs-on: ubuntu-24.04
-    needs: terraform
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Create logs directory
-        run: mkdir -p logs
-
-      - name: Setup SSH keys
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.PRIVATE_SSH_KEY_CONTENT }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H *.cloudapp.azure.com >> ~/.ssh/known_hosts 2>/dev/null || true
-
       - name: Register machines with SUSEConnect
         id: register
         uses: ./.github/actions/register-suse-machines
         with:
-          hosts_fqdn_list: ${{ needs.terraform.outputs.hosts_fqdn_list }}
+          hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
           registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
           registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
 
@@ -145,12 +129,12 @@ jobs:
           name: register-job-logs
           path: logs/
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 1
 
   destroy:
     name: Terraform Destroy
     runs-on: ubuntu-24.04
-    needs: [terraform, register]
+    needs: trento-installation-tests
     if: inputs.destroy_after
 
     steps:
