@@ -108,8 +108,6 @@ all:
         rabbitmq_password: "guest"
         web_admin_password: "adminpassword"
         trento_server_name: "{{ inventory_hostname }}"
-        trento_web_listen_port: 4000
-        trento_wanda_listen_port: 4001
         nginx_vhost_filename: "{{ inventory_hostname }}"
         nginx_ssl_cert: "{{ lookup('file', '${ANSIBLE_VM_CERTS_PATH}/' + inventory_hostname + '.crt') }}"
         nginx_ssl_key: "{{ lookup('file', '${ANSIBLE_VM_CERTS_PATH}/' + inventory_hostname + '.key') }}"
