@@ -111,13 +111,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Create logs directory
+        run: mkdir -p logs
+
       - name: Register machines with SUSEConnect
+        id: register
         uses: ./.github/actions/register-suse-machines
         with:
           hosts_fqdn_list: ${{ needs.terraform.outputs.hosts_fqdn_list }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
           registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: register-job-logs
+          path: logs/
+          if-no-files-found: warn
+          retention-days: 7
 
   destroy:
     name: Terraform Destroy

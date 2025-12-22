@@ -30,6 +30,9 @@ outputs:
   failed_hosts:
     description: 'List of hosts that failed to register'
     value: ${{ steps.register.outputs.failed_hosts }}
+  logs_dir:
+    description: 'Directory containing registration logs'
+    value: ${{ steps.register.outputs.logs_dir }}
 
 runs:
   using: 'composite'
@@ -54,32 +57,72 @@ runs:
             UserKnownHostsFile /dev/null
         EOF
 
+        # Set log directory
+        LOGS_DIR="logs"
+
         # Track registration results
         registered_count=0
         failed_hosts=""
+        total_hosts=$(echo $HOSTS_FQDN_LIST | wc -w)
+        current=0
+
+        echo "================================================"
+        echo "Starting registration of $total_hosts machines"
+        echo "================================================"
+        echo ""
 
         # Loop through each host and register
         for host in $HOSTS_FQDN_LIST; do
-          echo "Registering $host..."
+          ((current++))
+          echo "[$current/$total_hosts] Registering $host..."
 
+          # Create log file for this host
+          log_file="$LOGS_DIR/registration-$host.log"
+
+          # Run SUSEConnect and capture output
           if ssh -o ConnectTimeout="$CONNECTION_TIMEOUT" "$SSH_USERNAME@$host" \
-              "sudo SUSEConnect -r '${{ inputs.registration_code }}' -e '${{ inputs.registration_email }}'"; then
-            echo "✓ Successfully registered $host"
+              "sudo SUSEConnect -r '${{ inputs.registration_code }}' -e '${{ inputs.registration_email }}'" \
+              > "$log_file" 2>&1; then
+            echo "  ✓ Successfully registered $host"
             ((registered_count++))
           else
-            echo "✗ Failed to register $host"
+            echo "  ✗ Failed to register $host"
+            echo ""
+            echo "  Error details (last 30 lines):"
+            tail -n 30 "$log_file" | sed 's/^/    /'
+            echo ""
             failed_hosts="$failed_hosts $host"
           fi
         done
 
+        # Print summary
+        echo ""
+        echo "================================================"
+        echo "Registration Summary"
+        echo "================================================"
+        echo "Total machines: $total_hosts"
+        echo "Successfully registered: $registered_count"
+        echo "Failed: $((total_hosts - registered_count))"
+
+        if [ -n "$failed_hosts" ]; then
+          echo ""
+          echo "Failed hosts:$failed_hosts"
+        fi
+        echo "================================================"
+        echo ""
+        echo "Detailed logs saved to: $LOGS_DIR/"
+
         # Set outputs
         echo "registered_count=$registered_count" >> $GITHUB_OUTPUT
         echo "failed_hosts=$failed_hosts" >> $GITHUB_OUTPUT
+        echo "logs_dir=$LOGS_DIR" >> $GITHUB_OUTPUT
 
         # Check if any registrations failed
         if [ -n "$failed_hosts" ]; then
-          echo "Error: Failed to register the following hosts:$failed_hosts"
+          echo ""
+          echo "Error: Failed to register $((total_hosts - registered_count)) machine(s)"
           exit 1
         fi
 
-        echo "All machines registered successfully ($registered_count total)"
+        echo ""
+        echo "✓ All machines registered successfully!"
