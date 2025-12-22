@@ -18,7 +18,7 @@ inputs:
   connection_timeout:
     description: 'SSH connection timeout in seconds'
     required: false
-    default: '60'
+    default: '120'
 
 runs:
   using: 'composite'
