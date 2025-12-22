@@ -4,6 +4,10 @@ name: Azure Cleanup
 on:
   workflow_dispatch:
 
+env:
+  AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
+  AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
+
 jobs:
   terraform-destroy:
     name: Terraform Destroy
@@ -16,11 +20,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Extract Azure Credentials
+        id: azure-creds
+        uses: ./.github/actions/extract-azure-credentials
+        with:
+          azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
+
       - name: Run Terraform Destroy
         uses: ./.github/actions/terraform-destroy
         with:
-          azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
           azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
           azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
-          azure_blob_storage: ${{ vars.AZURE_BLOB_STORAGE }}
-          azure_blob_storage_container: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
+          ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
+          client_id: ${{ steps.azure-creds.outputs.client_id }}
+          client_secret: ${{ steps.azure-creds.outputs.client_secret }}
+          tenant_id: ${{ steps.azure-creds.outputs.tenant_id }}
+          subscription_id: ${{ steps.azure-creds.outputs.subscription_id }}
