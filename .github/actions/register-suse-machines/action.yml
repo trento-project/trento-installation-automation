@@ -56,7 +56,11 @@ runs:
         LOGS_DIR="logs"
 
         echo "DEBUG: Checking if logs directory exists..."
-        ls -la logs/ || echo "logs/ directory not found"
+        if [ ! -d "$LOGS_DIR" ]; then
+          echo "logs/ directory not found, creating it..."
+          mkdir -p "$LOGS_DIR"
+        fi
+        ls -la logs/
 
         # Track registration results
         registered_count=0
@@ -71,7 +75,7 @@ runs:
 
         # Loop through each host and register
         for host in $HOSTS_FQDN_LIST; do
-          ((current++))
+          current=$((current + 1))
           echo ""
           echo "[$current/$total_hosts] Registering $host..."
           echo "DEBUG: Creating log file for $host"
@@ -93,7 +97,7 @@ runs:
                  "sudo SUSEConnect -r '$REGISTRATION_CODE' -e '$REGISTRATION_EMAIL'" \
                  > "$log_file" 2>&1; then
             echo "  ✓ Successfully registered $host"
-            ((registered_count++))
+            registered_count=$((registered_count + 1))
           else
             exit_code=$?
             echo "  ✗ Failed to register $host (exit code: $exit_code)"
