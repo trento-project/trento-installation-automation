@@ -41,6 +41,8 @@ runs:
         HOSTS_FQDN_LIST="${{ inputs.hosts_fqdn_list }}"
         SSH_USERNAME="${{ inputs.ssh_username }}"
         CONNECTION_TIMEOUT="${{ inputs.connection_timeout }}"
+        REGISTRATION_CODE="${{ inputs.registration_code }}"
+        REGISTRATION_EMAIL="${{ inputs.registration_email }}"
 
         # Set log directory
         LOGS_DIR="logs"
@@ -70,7 +72,7 @@ runs:
                  -i ~/.ssh/id_rsa \
                  "$SSH_USERNAME@$host" bash > "$log_file" 2>&1 <<EOF_REMOTE
 echo "🔑 Registering system with SUSEConnect..."
-sudo SUSEConnect -r "${{ inputs.registration_code }}" -e "${{ inputs.registration_email }}" || echo "⚠️  Registration failed or already completed."
+sudo SUSEConnect -r "$REGISTRATION_CODE" -e "$REGISTRATION_EMAIL" || echo "⚠️  Registration failed or already completed."
 EOF_REMOTE
           then
             echo "  ✓ Successfully registered $host"
