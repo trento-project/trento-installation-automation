@@ -8,7 +8,6 @@ inputs:
   ssh_username:
     description: 'SSH username'
     required: true
-    default: 'cloudadmin'
   registration_code:
     description: 'SUSE registration code'
     required: true
@@ -18,7 +17,7 @@ inputs:
   connection_timeout:
     description: 'SSH connection timeout in seconds'
     required: false
-    default: '120'
+    default: '60'
 
 runs:
   using: 'composite'
