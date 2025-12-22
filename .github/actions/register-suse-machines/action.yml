@@ -38,77 +38,68 @@ runs:
       id: register
       shell: bash
       run: |
-        set -x  # Enable debug mode to see commands being executed
-
         HOSTS_FQDN_LIST="${{ inputs.hosts_fqdn_list }}"
         SSH_USERNAME="${{ inputs.ssh_username }}"
         CONNECTION_TIMEOUT="${{ inputs.connection_timeout }}"
         REGISTRATION_CODE="${{ inputs.registration_code }}"
         REGISTRATION_EMAIL="${{ inputs.registration_email }}"
 
-        echo "DEBUG: SSH_USERNAME=$SSH_USERNAME"
-        echo "DEBUG: CONNECTION_TIMEOUT=$CONNECTION_TIMEOUT"
-        echo "DEBUG: REGISTRATION_CODE is set: $([ -n "$REGISTRATION_CODE" ] && echo 'yes' || echo 'no')"
-        echo "DEBUG: REGISTRATION_EMAIL is set: $([ -n "$REGISTRATION_EMAIL" ] && echo 'yes' || echo 'no')"
-        echo "DEBUG: Number of hosts: $(echo $HOSTS_FQDN_LIST | wc -w)"
-
         # Set log directory
         LOGS_DIR="logs"
+        mkdir -p "$LOGS_DIR"
 
-        echo "DEBUG: Checking if logs directory exists..."
-        if [ ! -d "$LOGS_DIR" ]; then
-          echo "logs/ directory not found, creating it..."
-          mkdir -p "$LOGS_DIR"
-        fi
-        ls -la logs/
+        # Track parallel jobs
+        declare -a PIDS=()
+        declare -A PID_TO_HOST=()
 
-        # Track registration results
-        registered_count=0
-        failed_hosts=""
         total_hosts=$(echo $HOSTS_FQDN_LIST | wc -w)
-        current=0
 
         echo "================================================"
-        echo "Starting registration of $total_hosts machines"
+        echo "Registering $total_hosts machines in parallel"
         echo "================================================"
         echo ""
 
-        # Loop through each host and register
+        # Launch registration for each host in parallel
         for host in $HOSTS_FQDN_LIST; do
-          current=$((current + 1))
-          echo ""
-          echo "[$current/$total_hosts] Registering $host..."
-          echo "DEBUG: Creating log file for $host"
-
-          # Create log file for this host
           log_file="$LOGS_DIR/registration-$host.log"
-          echo "DEBUG: Log file path: $log_file"
 
-          echo "DEBUG: Checking SSH key exists..."
-          ls -la ~/.ssh/id_rsa || echo "SSH key not found!"
+          echo "Launching registration for $host..."
 
-          echo "DEBUG: Attempting SSH connection to $SSH_USERNAME@$host..."
+          # Run SUSEConnect via SSH in background
+          ssh -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout="$CONNECTION_TIMEOUT" \
+              -i ~/.ssh/id_rsa \
+              "$SSH_USERNAME@$host" \
+              "sudo SUSEConnect -r '$REGISTRATION_CODE' -e '$REGISTRATION_EMAIL'" \
+              > "$log_file" 2>&1 &
 
-          # Run SUSEConnect via SSH
-          if ssh -o StrictHostKeyChecking=accept-new \
-                 -o ConnectTimeout="$CONNECTION_TIMEOUT" \
-                 -i ~/.ssh/id_rsa \
-                 "$SSH_USERNAME@$host" \
-                 "sudo SUSEConnect -r '$REGISTRATION_CODE' -e '$REGISTRATION_EMAIL'" \
-                 > "$log_file" 2>&1; then
-            echo "  ✓ Successfully registered $host"
+          # Track process
+          current_pid=$!
+          PIDS+=("$current_pid")
+          PID_TO_HOST["$current_pid"]="$host"
+        done
+
+        echo ""
+        echo "All registration jobs launched. Waiting for completion..."
+        echo ""
+
+        # Wait for all jobs to complete and collect results
+        registered_count=0
+        failed_hosts=""
+
+        for pid in "${PIDS[@]}"; do
+          host="${PID_TO_HOST[$pid]}"
+
+          if wait "$pid"; then
+            echo "✓ Successfully registered $host"
             registered_count=$((registered_count + 1))
           else
-            exit_code=$?
-            echo "  ✗ Failed to register $host (exit code: $exit_code)"
-            echo ""
-            echo "  Error details (last 30 lines):"
+            echo "✗ Failed to register $host"
+            log_file="$LOGS_DIR/registration-$host.log"
             if [ -f "$log_file" ]; then
-              tail -n 30 "$log_file" | sed 's/^/    /'
-            else
-              echo "    Log file not found: $log_file"
+              echo "  Error details (last 30 lines):"
+              tail -n 30 "$log_file" | sed 's/^/  /'
             fi
-            echo ""
             failed_hosts="$failed_hosts $host"
           fi
         done
