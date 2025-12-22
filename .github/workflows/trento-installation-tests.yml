@@ -32,6 +32,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup SSH keys
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PRIVATE_SSH_KEY_CONTENT }}" > ~/.ssh/id_rsa
+          echo "${{ vars.PUBLIC_SSH_KEY_CONTENT }}" > ~/.ssh/id_rsa.pub
+          chmod 600 ~/.ssh/id_rsa
+          chmod 644 ~/.ssh/id_rsa.pub
+          ssh-keyscan -H *.cloudapp.azure.com >> ~/.ssh/known_hosts 2>/dev/null || true
+
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -114,12 +123,18 @@ jobs:
       - name: Create logs directory
         run: mkdir -p logs
 
+      - name: Setup SSH keys
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PRIVATE_SSH_KEY_CONTENT }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H *.cloudapp.azure.com >> ~/.ssh/known_hosts 2>/dev/null || true
+
       - name: Register machines with SUSEConnect
         id: register
         uses: ./.github/actions/register-suse-machines
         with:
           hosts_fqdn_list: ${{ needs.terraform.outputs.hosts_fqdn_list }}
-          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
           registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
 
@@ -141,6 +156,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup SSH keys
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PRIVATE_SSH_KEY_CONTENT }}" > ~/.ssh/id_rsa
+          echo "${{ vars.PUBLIC_SSH_KEY_CONTENT }}" > ~/.ssh/id_rsa.pub
+          chmod 600 ~/.ssh/id_rsa
+          chmod 644 ~/.ssh/id_rsa.pub
+          ssh-keyscan -H *.cloudapp.azure.com >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Azure Login
         uses: azure/login@v2

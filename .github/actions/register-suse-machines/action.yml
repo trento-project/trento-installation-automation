@@ -5,9 +5,6 @@ inputs:
   hosts_fqdn_list:
     description: 'Space-separated list of machine FQDNs to register'
     required: true
-  ssh_private_key:
-    description: 'SSH private key for authentication'
-    required: true
   ssh_username:
     description: 'SSH username'
     required: true
@@ -45,18 +42,6 @@ runs:
         SSH_USERNAME="${{ inputs.ssh_username }}"
         CONNECTION_TIMEOUT="${{ inputs.connection_timeout }}"
 
-        # Write SSH key to file
-        mkdir -p ~/.ssh
-        echo "${{ inputs.ssh_private_key }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-
-        # Disable strict host key checking for cloud VMs
-        cat >> ~/.ssh/config <<EOF
-        Host *.cloudapp.azure.com
-            StrictHostKeyChecking no
-            UserKnownHostsFile /dev/null
-        EOF
-
         # Set log directory
         LOGS_DIR="logs"
 
@@ -79,10 +64,15 @@ runs:
           # Create log file for this host
           log_file="$LOGS_DIR/registration-$host.log"
 
-          # Run SUSEConnect and capture output
-          if ssh -o ConnectTimeout="$CONNECTION_TIMEOUT" "$SSH_USERNAME@$host" \
-              "sudo SUSEConnect -r '${{ inputs.registration_code }}' -e '${{ inputs.registration_email }}'" \
-              > "$log_file" 2>&1; then
+          # Run SUSEConnect using heredoc pattern (same as setup-machines.sh)
+          if ssh -o StrictHostKeyChecking=accept-new \
+                 -o ConnectTimeout="$CONNECTION_TIMEOUT" \
+                 -i ~/.ssh/id_rsa \
+                 "$SSH_USERNAME@$host" bash > "$log_file" 2>&1 <<EOF_REMOTE
+echo "🔑 Registering system with SUSEConnect..."
+sudo SUSEConnect -r "${{ inputs.registration_code }}" -e "${{ inputs.registration_email }}" || echo "⚠️  Registration failed or already completed."
+EOF_REMOTE
+          then
             echo "  ✓ Successfully registered $host"
             ((registered_count++))
           else
