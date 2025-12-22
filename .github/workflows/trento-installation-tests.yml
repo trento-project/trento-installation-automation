@@ -126,37 +126,9 @@ jobs:
           path: logs/
           if-no-files-found: warn
           retention-days: 1
-
-  destroy:
-    name: Terraform Destroy
-    runs-on: ubuntu-24.04
-    needs: trento-installation-tests
-    if: inputs.destroy_after
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup SSH keys
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.PRIVATE_SSH_KEY_CONTENT }}" > ~/.ssh/id_rsa
-          echo "${{ vars.PUBLIC_SSH_KEY_CONTENT }}" > ~/.ssh/id_rsa.pub
-          chmod 600 ~/.ssh/id_rsa
-          chmod 644 ~/.ssh/id_rsa.pub
-
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Extract Azure Credentials
-        id: azure-creds
-        uses: ./.github/actions/extract-azure-credentials
-        with:
-          azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
-
+          
       - name: Terraform Destroy
+        if: inputs.destroy_after
         uses: ./.github/actions/terraform-destroy
         with:
           azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
@@ -166,3 +138,4 @@ jobs:
           client_secret: ${{ steps.azure-creds.outputs.client_secret }}
           tenant_id: ${{ steps.azure-creds.outputs.tenant_id }}
           subscription_id: ${{ steps.azure-creds.outputs.subscription_id }}
+  
