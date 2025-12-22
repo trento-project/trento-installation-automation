@@ -66,19 +66,18 @@ runs:
           # Create log file for this host
           log_file="$LOGS_DIR/registration-$host.log"
 
-          # Run SUSEConnect using heredoc pattern (same as setup-machines.sh)
+          # Run SUSEConnect via SSH
           if ssh -o StrictHostKeyChecking=accept-new \
                  -o ConnectTimeout="$CONNECTION_TIMEOUT" \
                  -i ~/.ssh/id_rsa \
-                 "$SSH_USERNAME@$host" bash > "$log_file" 2>&1 <<EOF_REMOTE
-echo "🔑 Registering system with SUSEConnect..."
-sudo SUSEConnect -r "$REGISTRATION_CODE" -e "$REGISTRATION_EMAIL" || echo "⚠️  Registration failed or already completed."
-EOF_REMOTE
-          then
+                 "$SSH_USERNAME@$host" \
+                 "sudo SUSEConnect -r '$REGISTRATION_CODE' -e '$REGISTRATION_EMAIL'" \
+                 > "$log_file" 2>&1; then
             echo "  ✓ Successfully registered $host"
             ((registered_count++))
           else
-            echo "  ✗ Failed to register $host"
+            exit_code=$?
+            echo "  ✗ Failed to register $host (exit code: $exit_code)"
             echo ""
             echo "  Error details (last 30 lines):"
             tail -n 30 "$log_file" | sed 's/^/    /'
