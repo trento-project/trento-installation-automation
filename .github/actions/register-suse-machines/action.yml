@@ -20,17 +20,6 @@ inputs:
     required: false
     default: '60'
 
-outputs:
-  registered_count:
-    description: 'Number of machines successfully registered'
-    value: ${{ steps.register.outputs.registered_count }}
-  failed_hosts:
-    description: 'List of hosts that failed to register'
-    value: ${{ steps.register.outputs.failed_hosts }}
-  logs_dir:
-    description: 'Directory containing registration logs'
-    value: ${{ steps.register.outputs.logs_dir }}
-
 runs:
   using: 'composite'
   steps:
@@ -46,7 +35,6 @@ runs:
 
         # Set log directory
         LOGS_DIR="logs"
-        mkdir -p "$LOGS_DIR"
 
         # Track parallel jobs
         declare -a PIDS=()
@@ -120,11 +108,6 @@ runs:
         echo "================================================"
         echo ""
         echo "Detailed logs saved to: $LOGS_DIR/"
-
-        # Set outputs
-        echo "registered_count=$registered_count" >> $GITHUB_OUTPUT
-        echo "failed_hosts=$failed_hosts" >> $GITHUB_OUTPUT
-        echo "logs_dir=$LOGS_DIR" >> $GITHUB_OUTPUT
 
         # Check if any registrations failed
         if [ -n "$failed_hosts" ]; then
