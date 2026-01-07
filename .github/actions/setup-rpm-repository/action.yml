@@ -107,8 +107,8 @@ runs:
           URL_BASE="https://$AZURE_BLOB_STORAGE.blob.core.windows.net/$AZURE_BLOB_STORAGE_CONTAINER"
           URL_ORIGIN="$URL_BASE/$SLES_MAJOR_VERSION/$SP_VERSION/?$AZURE_BLOB_STORAGE_SAS_TOKEN"
 
-          echo "  Node type: $NODE_TYPE"
-          echo "  Using repository path: $SLES_MAJOR_VERSION/$SP_VERSION/"
+          echo "  Node type is $NODE_TYPE"
+          echo "  Using repository path $SLES_MAJOR_VERSION/$SP_VERSION/"
 
           # Run RPM setup via SSH in background
           ssh -o StrictHostKeyChecking=accept-new \
@@ -117,7 +117,7 @@ runs:
               "$SSH_USERNAME@$host" \
               bash <<EOF_REMOTE > "$log_file" 2>&1 &
 echo "📦 Setting up custom RPM repository..."
-echo "Node type: $NODE_TYPE"
+echo "Node type is $NODE_TYPE"
 
 DEST_PATH='/var/cache/zypper/custom_repo'
 REPO_NAME='custom_rpms'

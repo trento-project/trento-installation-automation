@@ -10,6 +10,7 @@ on:
 
 env:
   AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
+  AZURE_BLOB_STORAGE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_CONTAINER }}
   AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
 
 jobs:
@@ -136,7 +137,7 @@ jobs:
           hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
           ssh_username: ${{ env.SSH_USERNAME }}
           azure_blob_storage: ${{ env.AZURE_BLOB_STORAGE }}
-          azure_blob_storage_container: ${{ secrets.AZURE_BLOB_STORAGE_CONTAINER }}
+          azure_blob_storage_container: ${{ env.AZURE_BLOB_STORAGE_CONTAINER }}
           azure_blob_storage_sas_token: ${{ secrets.AZURE_BLOB_STORAGE_SAS_TOKEN }}
 
       - name: Upload logs
