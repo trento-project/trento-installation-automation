@@ -110,70 +110,29 @@ runs:
           echo "  Node type is $NODE_TYPE"
           echo "  Using repository path $SLES_MAJOR_VERSION/$SP_VERSION/"
 
-          # Create the setup script
-          cat > /tmp/setup-rpm-repo-${host}.sh <<'SCRIPT_EOF'
-#!/bin/bash
-set -e
-
-DEST_PATH='/var/cache/zypper/custom_repo'
-REPO_NAME='custom_rpms'
-
-echo "Setting up custom RPM repository..."
-
-# Add Microsoft repository for azcopy
-echo "Adding Microsoft repository..."
-sudo zypper --non-interactive --gpg-auto-import-keys addrepo https://packages.microsoft.com/sles/15/prod/ microsoft-prod 2>/dev/null || true
-sudo zypper --non-interactive --gpg-auto-import-keys refresh
-
-# Install AzCopy with retry
-echo "Installing AzCopy..."
-(sudo zypper --non-interactive --gpg-auto-import-keys install -y azcopy) || \
-(echo "Retrying AzCopy..." && sleep 5 && sudo zypper --non-interactive --gpg-auto-import-keys install -y azcopy) || \
-{ echo 'ERROR - AzCopy installation failed.' >&2; exit 1; }
-
-# Download RPMs from Azure blob storage
-sudo mkdir -p "$DEST_PATH"
-SCRIPT_EOF
-
-          # Add node-type specific azcopy command
+          # Build the azcopy command based on node type
           if [ "$NODE_TYPE" = "control" ]; then
-            cat >> /tmp/setup-rpm-repo-${host}.sh <<SCRIPT_EOF
-echo "Downloading only ansible-trento RPMs for control node..."
-sudo azcopy cp "$URL_ORIGIN" "$DEST_PATH" --recursive=true --include-pattern "ansible-trento-*.rpm" || { echo 'ERROR - AzCopy transfer failed.' >&2; exit 1; }
-SCRIPT_EOF
+            AZCOPY_CMD="sudo azcopy cp \"$URL_ORIGIN\" /var/cache/zypper/custom_repo --recursive=true --include-pattern \"ansible-trento-*.rpm\""
           else
-            cat >> /tmp/setup-rpm-repo-${host}.sh <<SCRIPT_EOF
-echo "Downloading all RPMs except ansible-trento for target node..."
-sudo azcopy cp "$URL_ORIGIN" "$DEST_PATH" --recursive=true --exclude-pattern "ansible-trento-*.rpm" || { echo 'ERROR - AzCopy transfer failed.' >&2; exit 1; }
-SCRIPT_EOF
+            AZCOPY_CMD="sudo azcopy cp \"$URL_ORIGIN\" /var/cache/zypper/custom_repo --recursive=true --exclude-pattern \"ansible-trento-*.rpm\""
           fi
 
-          # Add remaining setup commands
-          cat >> /tmp/setup-rpm-repo-${host}.sh <<'SCRIPT_EOF'
-
-# Create local repository
-echo "Creating local repository..."
-sudo zypper --non-interactive --gpg-auto-import-keys install --auto-agree-with-licenses createrepo_c
-sudo createrepo_c "$DEST_PATH" || { echo 'ERROR - createrepo failed.' >&2; exit 1; }
-
-# Configure zypper to use the local repository
-echo "Configuring zypper repository..."
-echo -e "[$REPO_NAME]\nname=Local Custom RPMs\nbaseurl=file://$DEST_PATH/\nenabled=1\ngpgcheck=0\npriority=1" | sudo tee /etc/zypp/repos.d/$REPO_NAME.repo > /dev/null
-
-# Clean and refresh zypper
-echo "Refreshing zypper..."
-sudo zypper clean --all
-sudo zypper --non-interactive --gpg-auto-import-keys refresh || { echo 'ERROR - zypper refresh failed.' >&2; exit 1; }
-
-echo "RPM repository setup completed successfully"
-SCRIPT_EOF
-
-          # Run the script via SSH in background
+          # Run RPM setup via SSH in background
           ssh -o StrictHostKeyChecking=accept-new \
               -o ConnectTimeout="$CONNECTION_TIMEOUT" \
               -i ~/.ssh/id_rsa \
               "$SSH_USERNAME@$host" \
-              'bash -s' < /tmp/setup-rpm-repo-${host}.sh > "$log_file" 2>&1 &
+              "sudo zypper --non-interactive --gpg-auto-import-keys addrepo https://packages.microsoft.com/sles/15/prod/ microsoft-prod 2>/dev/null || true && \
+               sudo zypper --non-interactive --gpg-auto-import-keys refresh && \
+               sudo zypper --non-interactive --gpg-auto-import-keys install -y azcopy && \
+               sudo mkdir -p /var/cache/zypper/custom_repo && \
+               $AZCOPY_CMD && \
+               sudo zypper --non-interactive --gpg-auto-import-keys install --auto-agree-with-licenses createrepo_c && \
+               sudo createrepo_c /var/cache/zypper/custom_repo && \
+               echo -e '[custom_rpms]\nname=Local Custom RPMs\nbaseurl=file:///var/cache/zypper/custom_repo/\nenabled=1\ngpgcheck=0\npriority=1' | sudo tee /etc/zypp/repos.d/custom_rpms.repo > /dev/null && \
+               sudo zypper clean --all && \
+               sudo zypper --non-interactive --gpg-auto-import-keys refresh" \
+              > "$log_file" 2>&1 &
 
           # Track process
           current_pid=$!
