@@ -1,0 +1,146 @@
+name: 'Activate SUSE Modules'
+description: 'Activate SUSE modules (basesystem, PackageHub, legacy) on machines via SSH'
+
+inputs:
+  hosts_fqdn_list:
+    description: 'Space-separated list of machine FQDNs to activate modules on'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+  connection_timeout:
+    description: 'SSH connection timeout in seconds'
+    required: false
+    default: '60'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Activate SUSE modules on machines
+      id: activate
+      shell: bash
+      run: |
+        HOSTS_FQDN_LIST="${{ inputs.hosts_fqdn_list }}"
+        SSH_USERNAME="${{ inputs.ssh_username }}"
+        CONNECTION_TIMEOUT="${{ inputs.connection_timeout }}"
+
+        # Set log directory
+        LOGS_DIR="logs"
+
+        # Track parallel jobs
+        declare -a PIDS=()
+        declare -A PID_TO_HOST=()
+
+        total_hosts=$(echo $HOSTS_FQDN_LIST | wc -w)
+
+        echo "================================================"
+        echo "Activating SUSE modules on $total_hosts machines in parallel"
+        echo "================================================"
+        echo ""
+
+        # Launch module activation for each host in parallel
+        for host in $HOSTS_FQDN_LIST; do
+          log_file="$LOGS_DIR/module-activation-$host.log"
+
+          echo "Launching module activation for $host..."
+
+          # Run module activation via SSH in background
+          (
+            # Detect Service Pack version from hostname
+            SP_VERSION=$(echo "$host" | grep -o 'sp[0-9]*' | cut -c3-)
+
+            if [ -z "$SP_VERSION" ]; then
+              echo "Error: Could not detect SP version from hostname: $host" >&2
+              exit 1
+            fi
+
+            echo "Detected Service Pack version: $SP_VERSION"
+
+            # Activate sle-module-basesystem
+            echo "Activating sle-module-basesystem/15.$SP_VERSION/x86_64..."
+            ssh -o StrictHostKeyChecking=accept-new \
+                -o ConnectTimeout="$CONNECTION_TIMEOUT" \
+                -i ~/.ssh/id_rsa \
+                "$SSH_USERNAME@$host" \
+                "sudo SUSEConnect -p sle-module-basesystem/15.$SP_VERSION/x86_64" || echo "⚠️  Basesystem module failed."
+
+            # Activate PackageHub
+            echo "Activating PackageHub/15.$SP_VERSION/x86_64..."
+            ssh -o StrictHostKeyChecking=accept-new \
+                -o ConnectTimeout="$CONNECTION_TIMEOUT" \
+                -i ~/.ssh/id_rsa \
+                "$SSH_USERNAME@$host" \
+                "sudo SUSEConnect -p PackageHub/15.$SP_VERSION/x86_64" || echo "⚠️  PackageHub failed."
+
+            # Activate legacy module for SP5+
+            if [ "$SP_VERSION" -ge 5 ]; then
+              echo "Activating sle-module-legacy/15.$SP_VERSION/x86_64..."
+              ssh -o StrictHostKeyChecking=accept-new \
+                  -o ConnectTimeout="$CONNECTION_TIMEOUT" \
+                  -i ~/.ssh/id_rsa \
+                  "$SSH_USERNAME@$host" \
+                  "sudo SUSEConnect -p sle-module-legacy/15.$SP_VERSION/x86_64" || echo "⚠️  Legacy module failed."
+            else
+              echo "Skipping legacy module (only for SP5+)"
+            fi
+
+            echo "Module activation completed for $host"
+          ) > "$log_file" 2>&1 &
+
+          # Track process
+          current_pid=$!
+          PIDS+=("$current_pid")
+          PID_TO_HOST["$current_pid"]="$host"
+        done
+
+        echo ""
+        echo "All module activation jobs launched. Waiting for completion..."
+        echo ""
+
+        # Wait for all jobs to complete and collect results
+        success_count=0
+        failed_hosts=""
+
+        for pid in "${PIDS[@]}"; do
+          host="${PID_TO_HOST[$pid]}"
+
+          if wait "$pid"; then
+            echo "✓ Successfully activated modules on $host"
+            success_count=$((success_count + 1))
+          else
+            echo "✗ Failed to activate modules on $host"
+            log_file="$LOGS_DIR/module-activation-$host.log"
+            if [ -f "$log_file" ]; then
+              echo "  Error details (last 30 lines):"
+              tail -n 30 "$log_file" | sed 's/^/  /'
+            fi
+            failed_hosts="$failed_hosts $host"
+          fi
+        done
+
+        # Print summary
+        echo ""
+        echo "================================================"
+        echo "Module Activation Summary"
+        echo "================================================"
+        echo "Total machines: $total_hosts"
+        echo "Successfully activated: $success_count"
+        echo "Failed: $((total_hosts - success_count))"
+
+        if [ -n "$failed_hosts" ]; then
+          echo ""
+          echo "Failed hosts:$failed_hosts"
+        fi
+        echo "================================================"
+        echo ""
+        echo "Detailed logs saved to: $LOGS_DIR/"
+
+        # Check if any activations failed
+        if [ -n "$failed_hosts" ]; then
+          echo ""
+          echo "Error: Failed to activate modules on $((total_hosts - success_count)) machine(s)"
+          exit 1
+        fi
+
+        echo ""
+        echo "✓ All modules activated successfully!"
