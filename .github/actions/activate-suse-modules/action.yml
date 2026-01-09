@@ -85,6 +85,16 @@ runs:
             fi
 
             echo "Module activation completed for $host"
+
+            # Verify activated modules
+            echo ""
+            echo "Verifying activated modules..."
+            ssh -o StrictHostKeyChecking=accept-new \
+                -o ConnectTimeout="$CONNECTION_TIMEOUT" \
+                -i ~/.ssh/id_rsa \
+                "$SSH_USERNAME@$host" \
+                "sudo SUSEConnect --list" > "/tmp/modules-$host.txt" 2>&1 || echo "⚠️  Module verification failed."
+
           ) > "$log_file" 2>&1 &
 
           # Track process
@@ -118,8 +128,50 @@ runs:
           fi
         done
 
-        # Print summary
+        # Display activated modules for each host
         echo ""
+        echo "================================================"
+        echo "Activated Modules per Machine"
+        echo "================================================"
+        echo ""
+
+        for host in $HOSTS_FQDN_LIST; do
+          # Extract short hostname for display
+          short_host=$(echo "$host" | cut -d'.' -f1)
+
+          echo "📦 $short_host:"
+
+          # Read and parse modules from verification output
+          if [ -f "/tmp/modules-$host.txt" ]; then
+            # Check for Basesystem module
+            if grep -q "sle-module-basesystem" "/tmp/modules-$host.txt"; then
+              basesystem_version=$(grep -oP "sle-module-basesystem/\K[0-9]+\.[0-9]+/x86_64" "/tmp/modules-$host.txt" | head -1)
+              echo "   ✓ Basesystem Module ($basesystem_version)"
+            fi
+
+            # Check for PackageHub
+            if grep -q "PackageHub" "/tmp/modules-$host.txt"; then
+              packagehub_version=$(grep -oP "PackageHub/\K[0-9]+\.[0-9]+/x86_64" "/tmp/modules-$host.txt" | head -1)
+              echo "   ✓ SUSE Package Hub ($packagehub_version)"
+            fi
+
+            # Check for Legacy module
+            if grep -q "sle-module-legacy" "/tmp/modules-$host.txt"; then
+              legacy_version=$(grep -oP "sle-module-legacy/\K[0-9]+\.[0-9]+/x86_64" "/tmp/modules-$host.txt" | head -1)
+              echo "   ✓ Legacy Module ($legacy_version)"
+            fi
+
+            # If no modules found in output, show alternative message
+            if ! grep -qE "(basesystem|PackageHub|legacy)" "/tmp/modules-$host.txt"; then
+              echo "   ⚠️  Could not verify modules (check logs)"
+            fi
+          else
+            echo "   ⚠️  Verification output not found"
+          fi
+          echo ""
+        done
+
+        # Print summary
         echo "================================================"
         echo "Module Activation Summary"
         echo "================================================"
