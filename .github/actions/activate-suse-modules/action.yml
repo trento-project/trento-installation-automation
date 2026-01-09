@@ -93,7 +93,7 @@ runs:
                 -o ConnectTimeout="$CONNECTION_TIMEOUT" \
                 -i ~/.ssh/id_rsa \
                 "$SSH_USERNAME@$host" \
-                "sudo SUSEConnect --list" 2>&1 || echo "⚠️  Module verification command failed"
+                "sudo SUSEConnect --status-text" 2>&1 || echo "⚠️  Module verification command failed"
             echo "=== END VERIFICATION ==="
 
           ) > "$log_file" 2>&1 &
