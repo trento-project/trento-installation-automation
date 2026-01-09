@@ -88,12 +88,13 @@ runs:
 
             # Verify activated modules
             echo ""
-            echo "Verifying activated modules..."
+            echo "=== VERIFICATION: Activated Modules ==="
             ssh -o StrictHostKeyChecking=accept-new \
                 -o ConnectTimeout="$CONNECTION_TIMEOUT" \
                 -i ~/.ssh/id_rsa \
                 "$SSH_USERNAME@$host" \
-                "sudo SUSEConnect --list" > "/tmp/modules-$host.txt" 2>&1 || echo "⚠️  Module verification failed."
+                "sudo SUSEConnect --list" 2>&1 || echo "⚠️  Module verification command failed"
+            echo "=== END VERIFICATION ==="
 
           ) > "$log_file" 2>&1 &
 
@@ -138,35 +139,43 @@ runs:
         for host in $HOSTS_FQDN_LIST; do
           # Extract short hostname for display
           short_host=$(echo "$host" | cut -d'.' -f1)
+          log_file="$LOGS_DIR/module-activation-$host.log"
 
           echo "📦 $short_host:"
 
-          # Read and parse modules from verification output
-          if [ -f "/tmp/modules-$host.txt" ]; then
-            # Check for Basesystem module
-            if grep -q "sle-module-basesystem" "/tmp/modules-$host.txt"; then
-              basesystem_version=$(grep -oP "sle-module-basesystem/\K[0-9]+\.[0-9]+/x86_64" "/tmp/modules-$host.txt" | head -1)
-              echo "   ✓ Basesystem Module ($basesystem_version)"
-            fi
+          # Read and parse modules from log file
+          if [ -f "$log_file" ]; then
+            # Extract the verification section
+            verification_output=$(sed -n '/=== VERIFICATION: Activated Modules ===/,/=== END VERIFICATION ===/p' "$log_file")
 
-            # Check for PackageHub
-            if grep -q "PackageHub" "/tmp/modules-$host.txt"; then
-              packagehub_version=$(grep -oP "PackageHub/\K[0-9]+\.[0-9]+/x86_64" "/tmp/modules-$host.txt" | head -1)
-              echo "   ✓ SUSE Package Hub ($packagehub_version)"
-            fi
+            if [ -n "$verification_output" ]; then
+              # Check for Basesystem module
+              if echo "$verification_output" | grep -q "sle-module-basesystem"; then
+                basesystem_version=$(echo "$verification_output" | grep -oP "sle-module-basesystem/\K[0-9]+\.[0-9]+/x86_64" | head -1)
+                echo "   ✓ Basesystem Module ($basesystem_version)"
+              fi
 
-            # Check for Legacy module
-            if grep -q "sle-module-legacy" "/tmp/modules-$host.txt"; then
-              legacy_version=$(grep -oP "sle-module-legacy/\K[0-9]+\.[0-9]+/x86_64" "/tmp/modules-$host.txt" | head -1)
-              echo "   ✓ Legacy Module ($legacy_version)"
-            fi
+              # Check for PackageHub
+              if echo "$verification_output" | grep -q "PackageHub"; then
+                packagehub_version=$(echo "$verification_output" | grep -oP "PackageHub/\K[0-9]+\.[0-9]+/x86_64" | head -1)
+                echo "   ✓ SUSE Package Hub ($packagehub_version)"
+              fi
 
-            # If no modules found in output, show alternative message
-            if ! grep -qE "(basesystem|PackageHub|legacy)" "/tmp/modules-$host.txt"; then
-              echo "   ⚠️  Could not verify modules (check logs)"
+              # Check for Legacy module
+              if echo "$verification_output" | grep -q "sle-module-legacy"; then
+                legacy_version=$(echo "$verification_output" | grep -oP "sle-module-legacy/\K[0-9]+\.[0-9]+/x86_64" | head -1)
+                echo "   ✓ Legacy Module ($legacy_version)"
+              fi
+
+              # If no modules found in output, show alternative message
+              if ! echo "$verification_output" | grep -qE "(basesystem|PackageHub|legacy)"; then
+                echo "   ⚠️  Could not verify modules (check logs)"
+              fi
+            else
+              echo "   ⚠️  Verification section not found in log"
             fi
           else
-            echo "   ⚠️  Verification output not found"
+            echo "   ⚠️  Log file not found"
           fi
           echo ""
         done
