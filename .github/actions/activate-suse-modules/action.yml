@@ -46,6 +46,16 @@ runs:
 
           # Run module activation via SSH in background
           (
+            # Detect SLES version from hostname
+            if echo "$host" | grep -q 'sles16'; then
+              echo "Detected SLES 16 - skipping module activation (not applicable)"
+              echo ""
+              echo "=== VERIFICATION: Activated Modules ==="
+              echo "SLES 16 detected - module activation not required"
+              echo "=== END VERIFICATION ==="
+              exit 0
+            fi
+
             # Detect Service Pack version from hostname
             SP_VERSION=$(echo "$host" | grep -o 'sp[0-9]*' | cut -c3-)
 
@@ -149,27 +159,32 @@ runs:
             verification_output=$(sed -n '/=== VERIFICATION: Activated Modules ===/,/=== END VERIFICATION ===/p' "$log_file")
 
             if [ -n "$verification_output" ]; then
-              # Check for Basesystem module
-              if echo "$verification_output" | grep -q "sle-module-basesystem"; then
-                basesystem_version=$(echo "$verification_output" | grep -oP "sle-module-basesystem/\K[0-9]+\.[0-9]+/x86_64" | head -1)
-                echo "   ✓ Basesystem Module ($basesystem_version)"
-              fi
+              # Check if SLES 16 (no module activation needed)
+              if echo "$verification_output" | grep -q "SLES 16 detected"; then
+                echo "   ℹ️  SLES 16 - module activation not required"
+              else
+                # Check for Basesystem module
+                if echo "$verification_output" | grep -q "sle-module-basesystem"; then
+                  basesystem_version=$(echo "$verification_output" | grep -oP "sle-module-basesystem/\K[0-9]+\.[0-9]+/x86_64" | head -1)
+                  echo "   ✓ Basesystem Module ($basesystem_version)"
+                fi
 
-              # Check for PackageHub
-              if echo "$verification_output" | grep -q "PackageHub"; then
-                packagehub_version=$(echo "$verification_output" | grep -oP "PackageHub/\K[0-9]+\.[0-9]+/x86_64" | head -1)
-                echo "   ✓ SUSE Package Hub ($packagehub_version)"
-              fi
+                # Check for PackageHub
+                if echo "$verification_output" | grep -q "PackageHub"; then
+                  packagehub_version=$(echo "$verification_output" | grep -oP "PackageHub/\K[0-9]+\.[0-9]+/x86_64" | head -1)
+                  echo "   ✓ SUSE Package Hub ($packagehub_version)"
+                fi
 
-              # Check for Legacy module
-              if echo "$verification_output" | grep -q "sle-module-legacy"; then
-                legacy_version=$(echo "$verification_output" | grep -oP "sle-module-legacy/\K[0-9]+\.[0-9]+/x86_64" | head -1)
-                echo "   ✓ Legacy Module ($legacy_version)"
-              fi
+                # Check for Legacy module
+                if echo "$verification_output" | grep -q "sle-module-legacy"; then
+                  legacy_version=$(echo "$verification_output" | grep -oP "sle-module-legacy/\K[0-9]+\.[0-9]+/x86_64" | head -1)
+                  echo "   ✓ Legacy Module ($legacy_version)"
+                fi
 
-              # If no modules found in output, show alternative message
-              if ! echo "$verification_output" | grep -qE "(basesystem|PackageHub|legacy)"; then
-                echo "   ⚠️  Could not verify modules (check logs)"
+                # If no modules found in output, show alternative message
+                if ! echo "$verification_output" | grep -qE "(basesystem|PackageHub|legacy)"; then
+                  echo "   ⚠️  Could not verify modules (check logs)"
+                fi
               fi
             else
               echo "   ⚠️  Verification section not found in log"
