@@ -1,0 +1,193 @@
+name: 'Setup RPM Repository'
+description: 'Setup local RPM repository on machines with rpm suffix from Azure blob storage'
+
+inputs:
+  hosts_fqdn_list:
+    description: 'Space-separated list of machine FQDNs'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+  azure_blob_storage:
+    description: 'Azure blob storage account name'
+    required: true
+  azure_blob_storage_container:
+    description: 'Azure blob storage container name'
+    required: true
+  azure_blob_storage_sas_token:
+    description: 'Azure blob storage SAS token'
+    required: true
+  connection_timeout:
+    description: 'SSH connection timeout in seconds'
+    required: false
+    default: '60'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup RPM repository on machines
+      id: setup-rpm-repo
+      shell: bash
+      run: |
+        HOSTS_FQDN_LIST="${{ inputs.hosts_fqdn_list }}"
+        SSH_USERNAME="${{ inputs.ssh_username }}"
+        CONNECTION_TIMEOUT="${{ inputs.connection_timeout }}"
+        AZURE_BLOB_STORAGE="${{ inputs.azure_blob_storage }}"
+        AZURE_BLOB_STORAGE_CONTAINER="${{ inputs.azure_blob_storage_container }}"
+        AZURE_BLOB_STORAGE_SAS_TOKEN="${{ inputs.azure_blob_storage_sas_token }}"
+
+        # Set log directory
+        LOGS_DIR="logs"
+
+        # Filter hosts to only include control and target machines
+        target_hosts=""
+        for host in $HOSTS_FQDN_LIST; do
+          # Extract the prefix from hostname (e.g., control15sp4rpm.westeurope... -> control)
+          # Hostname format: prefix + slesVersion + sp + spVersion + suffix
+          hostname_base="${host%%.*}"  # Remove domain
+
+          # Check if hostname starts with "control" or "target"
+          if [[ "$hostname_base" == control* ]] || [[ "$hostname_base" == target* ]]; then
+            target_hosts="$target_hosts $host"
+          fi
+        done
+
+        # Trim leading whitespace
+        target_hosts=$(echo "$target_hosts" | xargs)
+
+        if [ -z "$target_hosts" ]; then
+          echo "================================================"
+          echo "No control or target hosts found - skipping RPM repository setup"
+          echo "================================================"
+          exit 0
+        fi
+
+        # Track parallel jobs
+        declare -a PIDS=()
+        declare -A PID_TO_HOST=()
+
+        total_hosts=$(echo $target_hosts | wc -w)
+
+        echo "================================================"
+        echo "Setting up RPM repository on $total_hosts control/target machines in parallel"
+        echo "================================================"
+        echo ""
+
+        # Launch RPM setup for each host in parallel
+        for host in $target_hosts; do
+          log_file="$LOGS_DIR/rpm-setup-$host.log"
+
+          echo "Launching RPM repository setup for $host..."
+
+          # Extract hostname base and determine node type
+          hostname_base="${host%%.*}"
+
+          # Determine if this is a control or target node
+          if [[ "$hostname_base" == control* ]]; then
+            NODE_TYPE="control"
+          elif [[ "$hostname_base" == target* ]]; then
+            NODE_TYPE="target"
+          else
+            echo "Warning: Unknown node type for $host, skipping"
+            continue
+          fi
+
+          # Extract SP version from hostname (e.g., control15sp3rpm -> 3)
+          # Hostname format: prefix + slesVersion + sp + spVersion + suffix
+          # Example: control15sp4rpm -> SP_VERSION=4, SLES_MAJOR_VERSION=15
+          if [[ "$host" =~ ([0-9]+)sp([0-9]+) ]]; then
+            SLES_MAJOR_VERSION="${BASH_REMATCH[1]}"
+            SP_VERSION="${BASH_REMATCH[2]}"
+          else
+            echo "Warning: Could not parse SLES version from hostname $host, skipping"
+            continue
+          fi
+
+          # Build version-specific blob storage URL
+          URL_BASE="https://$AZURE_BLOB_STORAGE.blob.core.windows.net/$AZURE_BLOB_STORAGE_CONTAINER"
+          URL_ORIGIN="$URL_BASE/$SLES_MAJOR_VERSION/$SP_VERSION/?$AZURE_BLOB_STORAGE_SAS_TOKEN"
+
+          echo "  Node type is $NODE_TYPE"
+          echo "  Using repository path $SLES_MAJOR_VERSION/$SP_VERSION/"
+
+          # Build the azcopy command based on node type
+          if [ "$NODE_TYPE" = "control" ]; then
+            AZCOPY_CMD="sudo azcopy cp \"$URL_ORIGIN\" /var/cache/zypper/custom_repo --recursive=true --include-pattern \"ansible-trento-*.rpm\""
+          else
+            AZCOPY_CMD="sudo azcopy cp \"$URL_ORIGIN\" /var/cache/zypper/custom_repo --recursive=true --exclude-pattern \"ansible-trento-*.rpm\""
+          fi
+
+          # Run RPM setup via SSH in background
+          ssh -o StrictHostKeyChecking=accept-new \
+              -o ConnectTimeout="$CONNECTION_TIMEOUT" \
+              -i ~/.ssh/id_rsa \
+              "$SSH_USERNAME@$host" \
+              "sudo zypper --non-interactive --gpg-auto-import-keys addrepo https://packages.microsoft.com/sles/15/prod/ microsoft-prod 2>/dev/null || true && \
+               sudo zypper --non-interactive --gpg-auto-import-keys refresh && \
+               sudo zypper --non-interactive --gpg-auto-import-keys install -y azcopy && \
+               sudo mkdir -p /var/cache/zypper/custom_repo && \
+               $AZCOPY_CMD && \
+               sudo zypper --non-interactive --gpg-auto-import-keys install --auto-agree-with-licenses createrepo_c && \
+               sudo createrepo_c /var/cache/zypper/custom_repo && \
+               echo -e '[custom_rpms]\nname=Local Custom RPMs\nbaseurl=file:///var/cache/zypper/custom_repo/\nenabled=1\ngpgcheck=0\npriority=1' | sudo tee /etc/zypp/repos.d/custom_rpms.repo > /dev/null && \
+               sudo zypper clean --all && \
+               sudo zypper --non-interactive --gpg-auto-import-keys refresh" \
+              > "$log_file" 2>&1 &
+
+          # Track process
+          current_pid=$!
+          PIDS+=("$current_pid")
+          PID_TO_HOST["$current_pid"]="$host"
+        done
+
+        echo ""
+        echo "All RPM setup jobs launched. Waiting for completion..."
+        echo ""
+
+        # Wait for all jobs to complete and collect results
+        success_count=0
+        failed_hosts=""
+
+        for pid in "${PIDS[@]}"; do
+          host="${PID_TO_HOST[$pid]}"
+
+          if wait "$pid"; then
+            echo "✓ Successfully setup RPM repository on $host"
+            success_count=$((success_count + 1))
+          else
+            echo "✗ Failed to setup RPM repository on $host"
+            log_file="$LOGS_DIR/rpm-setup-$host.log"
+            if [ -f "$log_file" ]; then
+              echo "  Error details (last 30 lines):"
+              tail -n 30 "$log_file" | sed 's/^/  /'
+            fi
+            failed_hosts="$failed_hosts $host"
+          fi
+        done
+
+        # Print summary
+        echo ""
+        echo "================================================"
+        echo "RPM Repository Setup Summary"
+        echo "================================================"
+        echo "Total control/target machines: $total_hosts"
+        echo "Successfully setup: $success_count"
+        echo "Failed: $((total_hosts - success_count))"
+
+        if [ -n "$failed_hosts" ]; then
+          echo ""
+          echo "Failed hosts:$failed_hosts"
+        fi
+        echo "================================================"
+        echo ""
+        echo "Detailed logs saved to: $LOGS_DIR/"
+
+        # Check if any setups failed
+        if [ -n "$failed_hosts" ]; then
+          echo ""
+          echo "Error: Failed to setup RPM repository on $((total_hosts - success_count)) machine(s)"
+          exit 1
+        fi
+
+        echo ""
+        echo "✓ All RPM repositories setup successfully!"
