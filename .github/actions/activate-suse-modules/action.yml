@@ -82,8 +82,8 @@ runs:
                 "$SSH_USERNAME@$host" \
                 "sudo SUSEConnect -p PackageHub/15.$SP_VERSION/x86_64" || echo "⚠️  PackageHub failed."
 
-            # Activate legacy module for SP5+
-            if [ "$SP_VERSION" -ge 5 ]; then
+            # Activate legacy module for SP6 only (SLES 15.6)
+            if [ "$SP_VERSION" -eq 6 ]; then
               echo "Activating sle-module-legacy/15.$SP_VERSION/x86_64..."
               ssh -o StrictHostKeyChecking=accept-new \
                   -o ConnectTimeout="$CONNECTION_TIMEOUT" \
@@ -91,7 +91,7 @@ runs:
                   "$SSH_USERNAME@$host" \
                   "sudo SUSEConnect -p sle-module-legacy/15.$SP_VERSION/x86_64" || echo "⚠️  Legacy module failed."
             else
-              echo "Skipping legacy module (only for SP5+)"
+              echo "Skipping legacy module (only required for SLES 15.6)"
             fi
 
             echo "Module activation completed for $host"
