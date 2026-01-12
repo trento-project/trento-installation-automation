@@ -137,6 +137,20 @@ jobs:
           hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
           ssh_username: ${{ env.SSH_USERNAME }}
 
+      - name: Install Python 3.11 on target machines
+        id: install-python311
+        uses: ./.github/actions/install-python311
+        with:
+          hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+
+      - name: Generate and deploy SSL certificates to target machines
+        id: generate-deploy-certs
+        uses: ./.github/actions/generate-and-deploy-certs
+        with:
+          hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+
       - name: Setup RPM repository on machines
         id: setup-rpm-repo
         uses: ./.github/actions/setup-rpm-repository

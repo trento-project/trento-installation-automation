@@ -1,0 +1,305 @@
+name: 'Generate and Deploy SSL Certificates'
+description: 'Generate self-signed SSL certificates and deploy them to target SLES machines via SCP'
+
+inputs:
+  hosts_fqdn_list:
+    description: 'Space-separated list of machine FQDNs (will be filtered for target machines only)'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+  connection_timeout:
+    description: 'SSH connection timeout in seconds'
+    required: false
+    default: '60'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate and deploy SSL certificates
+      id: generate-deploy-certs
+      shell: bash
+      run: |
+        HOSTS_FQDN_LIST="${{ inputs.hosts_fqdn_list }}"
+        SSH_USERNAME="${{ inputs.ssh_username }}"
+        CONNECTION_TIMEOUT="${{ inputs.connection_timeout }}"
+
+        # Set directories
+        LOGS_DIR="logs"
+        CERTS_DIR="$RUNNER_TEMP/certificates"
+
+        mkdir -p "$LOGS_DIR"
+        mkdir -p "$CERTS_DIR"
+
+        # Filter for target machines only
+        TARGET_HOSTS=""
+        for host in $HOSTS_FQDN_LIST; do
+          if echo "$host" | grep -q '^target'; then
+            TARGET_HOSTS="$TARGET_HOSTS $host"
+          fi
+        done
+
+        # Trim leading/trailing whitespace
+        TARGET_HOSTS=$(echo $TARGET_HOSTS | xargs)
+
+        echo "================================================"
+        echo "Generating and deploying SSL certificates"
+        echo "================================================"
+        echo ""
+        echo "Filtering target machines from full host list..."
+        echo "All hosts: $HOSTS_FQDN_LIST"
+        echo "Target hosts for certificate generation: $TARGET_HOSTS"
+        echo ""
+
+        # Check if there are any target hosts
+        if [ -z "$TARGET_HOSTS" ]; then
+          echo "No target machines found. Skipping certificate generation."
+          exit 0
+        fi
+
+        # Track parallel jobs
+        declare -a PIDS=()
+        declare -A PID_TO_HOST=()
+
+        total_hosts=$(echo $TARGET_HOSTS | wc -w)
+
+        echo "Generating certificates for $total_hosts target machines..."
+        echo ""
+
+        # Generate and deploy certificates for each target host
+        for host in $TARGET_HOSTS; do
+          log_file="$LOGS_DIR/cert-deploy-$host.log"
+
+          echo "Processing certificate for $host..."
+
+          # Run certificate generation and deployment in background
+          (
+            fqdn="$host"
+            crt_path="$CERTS_DIR/${fqdn}.crt"
+            key_path="$CERTS_DIR/${fqdn}.key"
+
+            echo "=== Certificate Generation for $fqdn ==="
+
+            # Create temporary OpenSSL config with SAN extension
+            TMP_CNF=$(mktemp)
+            cat > "$TMP_CNF" << EOF_CNF
+[req]
+distinguished_name = dn
+x509_extensions = v3_req
+prompt = no
+
+[dn]
+CN = ${fqdn}
+
+[v3_req]
+subjectAltName = DNS:${fqdn}
+EOF_CNF
+
+            # Generate certificate and key
+            echo "Generating self-signed certificate..."
+            if openssl req -newkey rsa:2048 \
+                -nodes \
+                -keyout "$key_path" \
+                -x509 \
+                -days 365 \
+                -out "$crt_path" \
+                -subj "/CN=${fqdn}" \
+                -reqexts v3_req \
+                -extensions v3_req \
+                -config "$TMP_CNF" 2>&1; then
+              echo "✓ Certificate generated successfully"
+            else
+              echo "✗ Failed to generate certificate"
+              rm -f "$TMP_CNF"
+              exit 1
+            fi
+
+            rm -f "$TMP_CNF"
+
+            # Verify certificate files exist
+            if [[ ! -f "$crt_path" || ! -f "$key_path" ]]; then
+              echo "✗ Certificate files not found after generation"
+              exit 1
+            fi
+
+            echo ""
+            echo "Certificate details:"
+            openssl x509 -in "$crt_path" -noout -subject -dates 2>&1
+
+            echo ""
+            echo "=== Deploying Certificate to $fqdn ==="
+
+            # Create certificates directory on remote host
+            echo "Creating /home/$SSH_USERNAME/certificates directory on remote host..."
+            if ssh -o StrictHostKeyChecking=accept-new \
+                -o ConnectTimeout="$CONNECTION_TIMEOUT" \
+                -i ~/.ssh/id_rsa \
+                "$SSH_USERNAME@$host" \
+                "mkdir -p /home/$SSH_USERNAME/certificates" 2>&1; then
+              echo "✓ Remote directory created"
+            else
+              echo "✗ Failed to create remote directory"
+              exit 1
+            fi
+
+            # Copy certificate to remote host
+            echo "Copying certificate file to remote host..."
+            if scp -o StrictHostKeyChecking=accept-new \
+                -o ConnectTimeout="$CONNECTION_TIMEOUT" \
+                -i ~/.ssh/id_rsa \
+                "$crt_path" \
+                "$SSH_USERNAME@$host:/home/$SSH_USERNAME/certificates/" 2>&1; then
+              echo "✓ Certificate file copied"
+            else
+              echo "✗ Failed to copy certificate file"
+              exit 1
+            fi
+
+            # Copy private key to remote host
+            echo "Copying private key file to remote host..."
+            if scp -o StrictHostKeyChecking=accept-new \
+                -o ConnectTimeout="$CONNECTION_TIMEOUT" \
+                -i ~/.ssh/id_rsa \
+                "$key_path" \
+                "$SSH_USERNAME@$host:/home/$SSH_USERNAME/certificates/" 2>&1; then
+              echo "✓ Private key file copied"
+            else
+              echo "✗ Failed to copy private key file"
+              exit 1
+            fi
+
+            # Set appropriate permissions on remote files
+            echo "Setting permissions on remote certificate files..."
+            if ssh -o StrictHostKeyChecking=accept-new \
+                -o ConnectTimeout="$CONNECTION_TIMEOUT" \
+                -i ~/.ssh/id_rsa \
+                "$SSH_USERNAME@$host" \
+                "chmod 644 /home/$SSH_USERNAME/certificates/${fqdn}.crt && chmod 600 /home/$SSH_USERNAME/certificates/${fqdn}.key" 2>&1; then
+              echo "✓ Permissions set (644 for .crt, 600 for .key)"
+            else
+              echo "⚠️  Failed to set permissions (files are still accessible)"
+            fi
+
+            # Verify deployment
+            echo ""
+            echo "=== VERIFICATION: Certificate Deployment ==="
+            ssh -o StrictHostKeyChecking=accept-new \
+                -o ConnectTimeout="$CONNECTION_TIMEOUT" \
+                -i ~/.ssh/id_rsa \
+                "$SSH_USERNAME@$host" \
+                "ls -lh /home/$SSH_USERNAME/certificates/" 2>&1 || echo "⚠️  Verification command failed"
+            echo "=== END VERIFICATION ==="
+
+            echo ""
+            echo "✓ Certificate deployment completed for $fqdn"
+
+          ) > "$log_file" 2>&1 &
+
+          # Track process
+          current_pid=$!
+          PIDS+=("$current_pid")
+          PID_TO_HOST["$current_pid"]="$host"
+        done
+
+        echo ""
+        echo "All certificate generation and deployment jobs launched. Waiting for completion..."
+        echo ""
+
+        # Wait for all jobs to complete and collect results
+        success_count=0
+        failed_hosts=""
+
+        for pid in "${PIDS[@]}"; do
+          host="${PID_TO_HOST[$pid]}"
+
+          if wait "$pid"; then
+            echo "✓ Successfully generated and deployed certificate for $host"
+            success_count=$((success_count + 1))
+          else
+            echo "✗ Failed to generate or deploy certificate for $host"
+            log_file="$LOGS_DIR/cert-deploy-$host.log"
+            if [ -f "$log_file" ]; then
+              echo "  Error details (last 30 lines):"
+              tail -n 30 "$log_file" | sed 's/^/  /'
+            fi
+            failed_hosts="$failed_hosts $host"
+          fi
+        done
+
+        # Display certificate deployment status for each host
+        echo ""
+        echo "================================================"
+        echo "Certificate Deployment Status per Machine"
+        echo "================================================"
+        echo ""
+
+        for host in $TARGET_HOSTS; do
+          # Extract short hostname for display
+          short_host=$(echo "$host" | cut -d'.' -f1)
+          log_file="$LOGS_DIR/cert-deploy-$host.log"
+
+          echo "🔒 $short_host:"
+
+          # Read and parse certificate info from log file
+          if [ -f "$log_file" ]; then
+            # Extract the verification section
+            verification_output=$(sed -n '/=== VERIFICATION: Certificate Deployment ===/,/=== END VERIFICATION ===/p' "$log_file")
+
+            if [ -n "$verification_output" ]; then
+              # Extract certificate files from ls output
+              if echo "$verification_output" | grep -q ".crt"; then
+                crt_info=$(echo "$verification_output" | grep ".crt" | awk '{print $9, "(" $5 ")"}')
+                echo "   ✓ Certificate: $crt_info"
+              fi
+
+              if echo "$verification_output" | grep -q ".key"; then
+                key_info=$(echo "$verification_output" | grep ".key" | awk '{print $9, "(" $5 ")"}')
+                echo "   ✓ Private Key: $key_info"
+              fi
+
+              # Extract certificate validity dates if available
+              cert_subject=$(sed -n 's/^subject=//p' "$log_file" | head -1)
+              cert_dates=$(sed -n 's/^notBefore=\|^notAfter=//p' "$log_file" | head -2 | tr '\n' ' ')
+
+              if [ -n "$cert_subject" ]; then
+                echo "   📋 Subject: $cert_subject"
+              fi
+
+              if [ -n "$cert_dates" ]; then
+                echo "   📅 Valid: $(echo $cert_dates | head -c 80)"
+              fi
+            else
+              echo "   ⚠️  Verification section not found in log"
+            fi
+          else
+            echo "   ⚠️  Log file not found"
+          fi
+          echo ""
+        done
+
+        # Print summary
+        echo "================================================"
+        echo "Certificate Generation and Deployment Summary"
+        echo "================================================"
+        echo "Total target machines: $total_hosts"
+        echo "Successfully deployed: $success_count"
+        echo "Failed: $((total_hosts - success_count))"
+
+        if [ -n "$failed_hosts" ]; then
+          echo ""
+          echo "Failed hosts:$failed_hosts"
+        fi
+        echo "================================================"
+        echo ""
+        echo "Detailed logs saved to: $LOGS_DIR/"
+        echo "Certificates generated in: $CERTS_DIR/ (runner temporary storage)"
+
+        # Check if any deployments failed
+        if [ -n "$failed_hosts" ]; then
+          echo ""
+          echo "Error: Failed to generate or deploy certificates on $((total_hosts - success_count)) machine(s)"
+          exit 1
+        fi
+
+        echo ""
+        echo "✓ All certificates generated and deployed successfully!"
