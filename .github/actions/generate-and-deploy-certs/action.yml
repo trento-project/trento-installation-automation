@@ -83,17 +83,17 @@ runs:
             # Create temporary OpenSSL config with SAN extension
             TMP_CNF=$(mktemp)
             cat > "$TMP_CNF" << EOF_CNF
-[req]
-distinguished_name = dn
-x509_extensions = v3_req
-prompt = no
+            [req]
+            distinguished_name = dn
+            x509_extensions = v3_req
+            prompt = no
 
-[dn]
-CN = ${fqdn}
+            [dn]
+            CN = ${fqdn}
 
-[v3_req]
-subjectAltName = DNS:${fqdn}
-EOF_CNF
+            [v3_req]
+            subjectAltName = DNS:${fqdn}
+            EOF_CNF
 
             # Generate certificate and key
             echo "Generating self-signed certificate..."
