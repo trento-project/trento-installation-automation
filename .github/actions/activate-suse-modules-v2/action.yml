@@ -8,6 +8,9 @@ inputs:
   ssh_username:
     description: 'SSH username'
     required: true
+  ssh_private_key:
+    description: 'SSH private key content'
+    required: true
   connection_timeout:
     description: 'SSH connection timeout in seconds'
     required: false
@@ -16,47 +19,67 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Activate SUSE modules on machines
-      id: activate
+    - name: Convert hosts list to comma-separated format
+      id: prepare-hosts
       shell: bash
       run: |
         HOSTS_FQDN_LIST="${{ inputs.hosts_fqdn_list }}"
-        SSH_USERNAME="${{ inputs.ssh_username }}"
-        CONNECTION_TIMEOUT="${{ inputs.connection_timeout }}"
+        # Convert space-separated list to comma-separated
+        HOSTS_CSV=$(echo $HOSTS_FQDN_LIST | tr ' ' ',')
+        echo "hosts_csv=$HOSTS_CSV" >> $GITHUB_OUTPUT
+        echo "Hosts to activate: $HOSTS_CSV"
 
-        echo "Activating SUSE modules on machines using pssh"
-        echo ""
+    - name: Activate SUSE modules on machines
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ steps.prepare-hosts.outputs.hosts_csv }}
+        username: ${{ inputs.ssh_username }}
+        key: ${{ inputs.ssh_private_key }}
+        timeout: 5m
+        command_timeout: 5m
+        script: |
+          # Skip SLES 16 machines silently
+          if echo "$(hostname)" | grep -q "sles16"; then
+            exit 0
+          fi
 
-        # Create hosts file for pssh
-        HOSTS_FILE=$(mktemp)
-        trap "rm -f $HOSTS_FILE" EXIT
+          # Extract service pack version from hostname
+          SP=$(hostname | grep -o "sp[4-7]" | cut -c3-)
 
-        for host in $HOSTS_FQDN_LIST; do
-          echo "$SSH_USERNAME@$host" >> "$HOSTS_FILE"
-        done
+          if [ -z "$SP" ]; then
+            echo "Error: Could not determine service pack version from hostname: $(hostname)"
+            exit 1
+          fi
 
-        # SSH options
-        SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=$CONNECTION_TIMEOUT -i ~/.ssh/id_rsa"
+          echo "Activating modules for SLES 15.${SP} on $(hostname)..."
 
-        # Activate modules in parallel on all hosts
-        echo "Activating modules..."
-        pssh -h "$HOSTS_FILE" -t 300 -O "$SSH_OPTS" -i 'if echo "$(hostname)" | grep -q "sles16"; then exit 0; fi; SP=$(hostname | grep -o "sp[4-7]" | cut -c3-); echo "Activating modules for SLES 15.${SP}..."; sudo SUSEConnect -p sle-module-basesystem/15.$SP/x86_64; sudo SUSEConnect -p PackageHub/15.$SP/x86_64; if [ "$SP" -eq 6 ]; then sudo SUSEConnect -p sle-module-legacy/15.$SP/x86_64; fi'
+          # Activate base module
+          sudo SUSEConnect -p sle-module-basesystem/15.$SP/x86_64
 
-        activation_exit=$?
+          # Activate PackageHub
+          sudo SUSEConnect -p PackageHub/15.$SP/x86_64
 
-        echo ""
-        echo "Verifying activated modules on each machine..."
-        echo ""
+          # Activate legacy module only for SP6
+          if [ "$SP" -eq 6 ]; then
+            sudo SUSEConnect -p sle-module-legacy/15.$SP/x86_64
+          fi
 
-        # Show status from each machine
-        pssh -h "$HOSTS_FILE" -t "$CONNECTION_TIMEOUT" -O "$SSH_OPTS" -i 'if echo "$(hostname)" | grep -q "sles16"; then exit 0; fi; echo "=== $(hostname) ==="; sudo SUSEConnect --status-text'
+          echo "Module activation completed for $(hostname)"
 
-        echo ""
+    - name: Verify activated modules
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ steps.prepare-hosts.outputs.hosts_csv }}
+        username: ${{ inputs.ssh_username }}
+        key: ${{ inputs.ssh_private_key }}
+        timeout: 60s
+        command_timeout: 60s
+        script: |
+          # Skip SLES 16 machines
+          if echo "$(hostname)" | grep -q "sles16"; then
+            exit 0
+          fi
 
-        if [ $activation_exit -ne 0 ]; then
-          echo "Error: Module activation failed on one or more machines"
-          exit 1
-        fi
-
-        echo "Module activation completed"
+          echo "=== $(hostname) ==="
+          sudo SUSEConnect --status-text
 
