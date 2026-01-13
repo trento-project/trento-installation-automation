@@ -70,6 +70,7 @@ runs:
         key: ${{ inputs.ssh_private_key }}
         timeout: 60s
         command_timeout: 60s
+        sync: true
         script: |
           # Skip SLES 16 machines
           if echo "$(hostname)" | grep -q "sles16"; then
