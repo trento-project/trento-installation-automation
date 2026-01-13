@@ -1,0 +1,62 @@
+name: 'Activate SUSE Modules'
+description: 'Activate SUSE modules (basesystem, PackageHub, legacy) on machines via SSH'
+
+inputs:
+  hosts_fqdn_list:
+    description: 'Space-separated list of machine FQDNs to activate modules on'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+  connection_timeout:
+    description: 'SSH connection timeout in seconds'
+    required: false
+    default: '60'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Activate SUSE modules on machines
+      id: activate
+      shell: bash
+      run: |
+        HOSTS_FQDN_LIST="${{ inputs.hosts_fqdn_list }}"
+        SSH_USERNAME="${{ inputs.ssh_username }}"
+        CONNECTION_TIMEOUT="${{ inputs.connection_timeout }}"
+
+        echo "Activating SUSE modules on machines using pssh"
+        echo ""
+
+        # Create hosts file for pssh
+        HOSTS_FILE=$(mktemp)
+        trap "rm -f $HOSTS_FILE" EXIT
+
+        for host in $HOSTS_FQDN_LIST; do
+          echo "$SSH_USERNAME@$host" >> "$HOSTS_FILE"
+        done
+
+        # SSH options
+        SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=$CONNECTION_TIMEOUT -i ~/.ssh/id_rsa"
+
+        # Activate modules in parallel on all hosts
+        echo "Activating modules..."
+        pssh -h "$HOSTS_FILE" -t 300 -O "$SSH_OPTS" -i 'if echo "$(hostname)" | grep -q "sles16"; then exit 0; fi; SP=$(hostname | grep -o "sp[4-7]" | cut -c3-); echo "Activating modules for SLES 15.${SP}..."; sudo SUSEConnect -p sle-module-basesystem/15.$SP/x86_64; sudo SUSEConnect -p PackageHub/15.$SP/x86_64; if [ "$SP" -eq 6 ]; then sudo SUSEConnect -p sle-module-legacy/15.$SP/x86_64; fi'
+
+        activation_exit=$?
+
+        echo ""
+        echo "Verifying activated modules on each machine..."
+        echo ""
+
+        # Show status from each machine
+        pssh -h "$HOSTS_FILE" -t "$CONNECTION_TIMEOUT" -O "$SSH_OPTS" -i 'if echo "$(hostname)" | grep -q "sles16"; then exit 0; fi; echo "=== $(hostname) ==="; sudo SUSEConnect --status-text'
+
+        echo ""
+
+        if [ $activation_exit -ne 0 ]; then
+          echo "Error: Module activation failed on one or more machines"
+          exit 1
+        fi
+
+        echo "Module activation completed"
+

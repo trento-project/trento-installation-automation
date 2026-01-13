@@ -39,6 +39,11 @@ jobs:
       - name: Create logs directory
         run: mkdir -p logs
 
+      - name: Install pssh
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pssh
+
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -132,7 +137,7 @@ jobs:
 
       - name: Activate SUSE modules on machines
         id: activate-modules
-        uses: ./.github/actions/activate-suse-modules
+        uses: ./.github/actions/activate-suse-modules-v2
         with:
           hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
           ssh_username: ${{ env.SSH_USERNAME }}
