@@ -51,20 +51,16 @@ runs:
             exit 1
           fi
 
-          echo "Activating modules for SLES 15.${SP} on $(hostname)..."
-
           # Activate base module
-          sudo SUSEConnect -p sle-module-basesystem/15.$SP/x86_64
+          sudo SUSEConnect -p sle-module-basesystem/15.$SP/x86_64 >/dev/null 2>&1
 
           # Activate PackageHub
-          sudo SUSEConnect -p PackageHub/15.$SP/x86_64
+          sudo SUSEConnect -p PackageHub/15.$SP/x86_64 >/dev/null 2>&1
 
           # Activate legacy module only for SP6
           if [ "$SP" -eq 6 ]; then
-            sudo SUSEConnect -p sle-module-legacy/15.$SP/x86_64
+            sudo SUSEConnect -p sle-module-legacy/15.$SP/x86_64 >/dev/null 2>&1
           fi
-
-          echo "Module activation completed for $(hostname)"
 
     - name: Verify activated modules
       uses: appleboy/ssh-action@v1
@@ -80,6 +76,8 @@ runs:
             exit 0
           fi
 
+          echo ""
           echo "=== $(hostname) ==="
           sudo SUSEConnect --status-text
+          echo ""
 
