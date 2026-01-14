@@ -38,47 +38,25 @@ runs:
         timeout: 5m
         command_timeout: 5m
         script: |
-          # Skip SLES 16 machines silently
-          if echo "$(hostname)" | grep -q "sles16"; then
+          set -e
+
+          source /etc/os-release
+
+          # Skip SLES 16 machines
+          if [[ "$VERSION_ID" == 16* ]]; then
             exit 0
           fi
 
-          # Extract service pack version from hostname
-          SP=$(hostname | grep -o "sp[4-7]" | cut -c3-)
+          SP=$(echo "$VERSION_ID" | cut -d'.' -f2)
 
           if [ -z "$SP" ]; then
-            echo "Error: Could not determine service pack version from hostname: $(hostname)"
             exit 1
           fi
 
-          # Activate base module
-          sudo SUSEConnect -p sle-module-basesystem/15.$SP/x86_64 >/dev/null 2>&1
+          sudo SUSEConnect -p fake-module/15.$SP/x86_64
+          sudo SUSEConnect -p sle-module-basesystem/15.$SP/x86_64
+          sudo SUSEConnect -p PackageHub/15.$SP/x86_64
 
-          # Activate PackageHub
-          sudo SUSEConnect -p PackageHub/15.$SP/x86_64 >/dev/null 2>&1
-
-          # Activate legacy module only for SP6
           if [ "$SP" -eq 6 ]; then
-            sudo SUSEConnect -p sle-module-legacy/15.$SP/x86_64 >/dev/null 2>&1
+            sudo SUSEConnect -p sle-module-legacy/15.$SP/x86_64
           fi
-
-    - name: Verify activated modules
-      uses: appleboy/ssh-action@v1
-      with:
-        host: ${{ steps.prepare-hosts.outputs.hosts_csv }}
-        username: ${{ inputs.ssh_username }}
-        key: ${{ inputs.ssh_private_key }}
-        timeout: 60s
-        command_timeout: 60s
-        sync: true
-        script: |
-          # Skip SLES 16 machines
-          if echo "$(hostname)" | grep -q "sles16"; then
-            exit 0
-          fi
-
-          echo ""
-          echo "=== $(hostname) ==="
-          sudo SUSEConnect --status-text
-          echo ""
-
