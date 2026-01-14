@@ -42,6 +42,8 @@ runs:
 
           source /etc/os-release
 
+          echo "Detected OS VERSION_ID: $VERSION_ID"
+
           # Skip SLES 16 machines
           if [[ "$VERSION_ID" == 16* ]]; then
             exit 0
