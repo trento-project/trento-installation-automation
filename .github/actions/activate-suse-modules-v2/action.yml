@@ -30,13 +30,13 @@ runs:
         echo "Hosts to activate: $HOSTS_CSV"
 
     - name: Activate SUSE modules on machines
-      uses: appleboy/ssh-action@v1
+      uses: appleboy/ssh-action@v1.2.4
       with:
         host: ${{ steps.prepare-hosts.outputs.hosts_csv }}
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
-        timeout: 5m
-        command_timeout: 5m
+        timeout: 1m
+        command_timeout: 1m
         script: |
           set -e
 
@@ -53,7 +53,6 @@ runs:
             exit 1
           fi
 
-          sudo SUSEConnect -p fake-module/15.$SP/x86_64
           sudo SUSEConnect -p sle-module-basesystem/15.$SP/x86_64
           sudo SUSEConnect -p PackageHub/15.$SP/x86_64
 
