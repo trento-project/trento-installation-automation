@@ -132,7 +132,7 @@ jobs:
 
       - name: Activate SUSE modules on machines
         id: activate-modules
-        uses: ./.github/actions/activate-suse-modules-v2
+        uses: ./.github/actions/activate-suse-modules
         with:
           hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
           ssh_username: ${{ env.SSH_USERNAME }}

@@ -8,6 +8,9 @@ inputs:
   ssh_username:
     description: 'SSH username'
     required: true
+  ssh_private_key:
+    description: 'SSH private key content'
+    required: true
   connection_timeout:
     description: 'SSH connection timeout in seconds'
     required: false
@@ -16,207 +19,45 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Activate SUSE modules on machines
-      id: activate
+    - name: Convert hosts list to comma-separated format
+      id: prepare-hosts
       shell: bash
       run: |
         HOSTS_FQDN_LIST="${{ inputs.hosts_fqdn_list }}"
-        SSH_USERNAME="${{ inputs.ssh_username }}"
-        CONNECTION_TIMEOUT="${{ inputs.connection_timeout }}"
+        # Convert space-separated list to comma-separated
+        HOSTS_CSV=$(echo $HOSTS_FQDN_LIST | tr ' ' ',')
+        echo "hosts_csv=$HOSTS_CSV" >> $GITHUB_OUTPUT
+        echo "Hosts to activate: $HOSTS_CSV"
 
-        # Set log directory
-        LOGS_DIR="logs"
+    - name: Activate SUSE modules on machines
+      uses: appleboy/ssh-action@v1.2.4
+      with:
+        host: ${{ steps.prepare-hosts.outputs.hosts_csv }}
+        username: ${{ inputs.ssh_username }}
+        key: ${{ inputs.ssh_private_key }}
+        timeout: 1m
+        command_timeout: 1m
+        script: |
+          set -e
 
-        # Track parallel jobs
-        declare -a PIDS=()
-        declare -A PID_TO_HOST=()
+          source /etc/os-release
 
-        total_hosts=$(echo $HOSTS_FQDN_LIST | wc -w)
+          echo "Detected OS VERSION_ID: $VERSION_ID"
 
-        echo "================================================"
-        echo "Activating SUSE modules on $total_hosts machines in parallel"
-        echo "================================================"
-        echo ""
-
-        # Launch module activation for each host in parallel
-        for host in $HOSTS_FQDN_LIST; do
-          log_file="$LOGS_DIR/module-activation-$host.log"
-
-          echo "Launching module activation for $host..."
-
-          # Run module activation via SSH in background
-          (
-            # Detect SLES version from hostname
-            if echo "$host" | grep -q 'sles16'; then
-              echo "Detected SLES 16 - skipping module activation (not applicable)"
-              echo ""
-              echo "=== VERIFICATION: Activated Modules ==="
-              echo "SLES 16 detected - module activation not required"
-              echo "=== END VERIFICATION ==="
-              exit 0
-            fi
-
-            # Detect Service Pack version from hostname
-            SP_VERSION=$(echo "$host" | grep -o 'sp[0-9]*' | cut -c3-)
-
-            if [ -z "$SP_VERSION" ]; then
-              echo "Error: Could not detect SP version from hostname: $host" >&2
-              exit 1
-            fi
-
-            echo "Detected Service Pack version: $SP_VERSION"
-
-            # Activate sle-module-basesystem
-            echo "Activating sle-module-basesystem/15.$SP_VERSION/x86_64..."
-            ssh -o StrictHostKeyChecking=accept-new \
-                -o ConnectTimeout="$CONNECTION_TIMEOUT" \
-                -i ~/.ssh/id_rsa \
-                "$SSH_USERNAME@$host" \
-                "sudo SUSEConnect -p sle-module-basesystem/15.$SP_VERSION/x86_64" || echo "⚠️  Basesystem module failed."
-
-            # Activate PackageHub
-            echo "Activating PackageHub/15.$SP_VERSION/x86_64..."
-            ssh -o StrictHostKeyChecking=accept-new \
-                -o ConnectTimeout="$CONNECTION_TIMEOUT" \
-                -i ~/.ssh/id_rsa \
-                "$SSH_USERNAME@$host" \
-                "sudo SUSEConnect -p PackageHub/15.$SP_VERSION/x86_64" || echo "⚠️  PackageHub failed."
-
-            # Activate legacy module for SP6 only (SLES 15.6)
-            if [ "$SP_VERSION" -eq 6 ]; then
-              echo "Activating sle-module-legacy/15.$SP_VERSION/x86_64..."
-              ssh -o StrictHostKeyChecking=accept-new \
-                  -o ConnectTimeout="$CONNECTION_TIMEOUT" \
-                  -i ~/.ssh/id_rsa \
-                  "$SSH_USERNAME@$host" \
-                  "sudo SUSEConnect -p sle-module-legacy/15.$SP_VERSION/x86_64" || echo "⚠️  Legacy module failed."
-            else
-              echo "Skipping legacy module (only required for SLES 15.6)"
-            fi
-
-            echo "Module activation completed for $host"
-
-            # Verify activated modules
-            echo ""
-            echo "=== VERIFICATION: Activated Modules ==="
-            ssh -o StrictHostKeyChecking=accept-new \
-                -o ConnectTimeout="$CONNECTION_TIMEOUT" \
-                -i ~/.ssh/id_rsa \
-                "$SSH_USERNAME@$host" \
-                "sudo SUSEConnect --status-text" 2>&1 || echo "⚠️  Module verification command failed"
-            echo "=== END VERIFICATION ==="
-
-          ) > "$log_file" 2>&1 &
-
-          # Track process
-          current_pid=$!
-          PIDS+=("$current_pid")
-          PID_TO_HOST["$current_pid"]="$host"
-        done
-
-        echo ""
-        echo "All module activation jobs launched. Waiting for completion..."
-        echo ""
-
-        # Wait for all jobs to complete and collect results
-        success_count=0
-        failed_hosts=""
-
-        for pid in "${PIDS[@]}"; do
-          host="${PID_TO_HOST[$pid]}"
-
-          if wait "$pid"; then
-            echo "✓ Successfully activated modules on $host"
-            success_count=$((success_count + 1))
-          else
-            echo "✗ Failed to activate modules on $host"
-            log_file="$LOGS_DIR/module-activation-$host.log"
-            if [ -f "$log_file" ]; then
-              echo "  Error details (last 30 lines):"
-              tail -n 30 "$log_file" | sed 's/^/  /'
-            fi
-            failed_hosts="$failed_hosts $host"
+          # Skip SLES 16 machines
+          if [[ "$VERSION_ID" == 16* ]]; then
+            exit 0
           fi
-        done
 
-        # Display activated modules for each host
-        echo ""
-        echo "================================================"
-        echo "Activated Modules per Machine"
-        echo "================================================"
-        echo ""
+          SP=$(echo "$VERSION_ID" | cut -d'.' -f2)
 
-        for host in $HOSTS_FQDN_LIST; do
-          # Extract short hostname for display
-          short_host=$(echo "$host" | cut -d'.' -f1)
-          log_file="$LOGS_DIR/module-activation-$host.log"
-
-          echo "📦 $short_host:"
-
-          # Read and parse modules from log file
-          if [ -f "$log_file" ]; then
-            # Extract the verification section
-            verification_output=$(sed -n '/=== VERIFICATION: Activated Modules ===/,/=== END VERIFICATION ===/p' "$log_file")
-
-            if [ -n "$verification_output" ]; then
-              # Check if SLES 16 (no module activation needed)
-              if echo "$verification_output" | grep -q "SLES 16 detected"; then
-                echo "   ℹ️  SLES 16 - module activation not required"
-              else
-                # Check for Basesystem module
-                if echo "$verification_output" | grep -q "sle-module-basesystem"; then
-                  basesystem_version=$(echo "$verification_output" | grep -oP "sle-module-basesystem/\K[0-9]+\.[0-9]+/x86_64" | head -1)
-                  echo "   ✓ Basesystem Module ($basesystem_version)"
-                fi
-
-                # Check for PackageHub
-                if echo "$verification_output" | grep -q "PackageHub"; then
-                  packagehub_version=$(echo "$verification_output" | grep -oP "PackageHub/\K[0-9]+\.[0-9]+/x86_64" | head -1)
-                  echo "   ✓ SUSE Package Hub ($packagehub_version)"
-                fi
-
-                # Check for Legacy module
-                if echo "$verification_output" | grep -q "sle-module-legacy"; then
-                  legacy_version=$(echo "$verification_output" | grep -oP "sle-module-legacy/\K[0-9]+\.[0-9]+/x86_64" | head -1)
-                  echo "   ✓ Legacy Module ($legacy_version)"
-                fi
-
-                # If no modules found in output, show alternative message
-                if ! echo "$verification_output" | grep -qE "(basesystem|PackageHub|legacy)"; then
-                  echo "   ⚠️  Could not verify modules (check logs)"
-                fi
-              fi
-            else
-              echo "   ⚠️  Verification section not found in log"
-            fi
-          else
-            echo "   ⚠️  Log file not found"
+          if [ -z "$SP" ]; then
+            exit 1
           fi
-          echo ""
-        done
 
-        # Print summary
-        echo "================================================"
-        echo "Module Activation Summary"
-        echo "================================================"
-        echo "Total machines: $total_hosts"
-        echo "Successfully activated: $success_count"
-        echo "Failed: $((total_hosts - success_count))"
+          sudo SUSEConnect -p sle-module-basesystem/15.$SP/x86_64
+          sudo SUSEConnect -p PackageHub/15.$SP/x86_64
 
-        if [ -n "$failed_hosts" ]; then
-          echo ""
-          echo "Failed hosts:$failed_hosts"
-        fi
-        echo "================================================"
-        echo ""
-        echo "Detailed logs saved to: $LOGS_DIR/"
-
-        # Check if any activations failed
-        if [ -n "$failed_hosts" ]; then
-          echo ""
-          echo "Error: Failed to activate modules on $((total_hosts - success_count)) machine(s)"
-          exit 1
-        fi
-
-        echo ""
-        echo "✓ All modules activated successfully!"
+          if [ "$SP" -eq 6 ]; then
+            sudo SUSEConnect -p sle-module-legacy/15.$SP/x86_64
+          fi
