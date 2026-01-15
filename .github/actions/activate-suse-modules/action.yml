@@ -35,8 +35,6 @@ runs:
         host: ${{ steps.prepare-hosts.outputs.hosts_csv }}
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
-        timeout: 1m
-        command_timeout: 1m
         script: |
           set -e
 
@@ -47,15 +45,9 @@ runs:
             exit 0
           fi
 
-          SP=$(echo "$VERSION_ID" | cut -d'.' -f2)
+          sudo SUSEConnect -p sle-module-basesystem/$VERSION_ID/x86_64
+          sudo SUSEConnect -p PackageHub/$VERSION_ID/x86_64
 
-          if [ -z "$SP" ]; then
-            exit 1
-          fi
-
-          sudo SUSEConnect -p sle-module-basesystem/15.$SP/x86_64
-          sudo SUSEConnect -p PackageHub/15.$SP/x86_64
-
-          if [ "$SP" -eq 6 ]; then
-            sudo SUSEConnect -p sle-module-legacy/15.$SP/x86_64
+          if [[ "$VERSION_ID" == "15.6" ]]; then
+            sudo SUSEConnect -p sle-module-legacy/$VERSION_ID/x86_64
           fi
