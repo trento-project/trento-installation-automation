@@ -11,10 +11,6 @@ inputs:
   ssh_private_key:
     description: 'SSH private key content'
     required: true
-  connection_timeout:
-    description: 'SSH connection timeout in seconds'
-    required: false
-    default: '60'
 
 runs:
   using: 'composite'
