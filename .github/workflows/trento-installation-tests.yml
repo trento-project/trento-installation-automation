@@ -51,7 +51,7 @@ jobs:
           azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Parse tool versions
-        uses: endorama/asdf-parse-tool-versions@v1
+        uses: endorama/asdf-parse-tool-versions@v1.5.0
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -129,6 +129,14 @@ jobs:
           ssh_username: ${{ env.SSH_USERNAME }}
           registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
           registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
+
+      - name: Activate SUSE modules on machines
+        id: activate-modules
+        uses: ./.github/actions/activate-suse-modules
+        with:
+          hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
       - name: Setup RPM repository on machines
         id: setup-rpm-repo
