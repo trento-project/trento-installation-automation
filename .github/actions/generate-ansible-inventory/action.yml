@@ -11,6 +11,9 @@ inputs:
   ssh_private_key:
     description: 'SSH private key content'
     required: true
+  web_admin_password:
+    description: 'Trento web admin password'
+    required: true
 
 runs:
   using: 'composite'
@@ -66,7 +69,7 @@ runs:
           sudo mkdir -p /etc/ansible
 
           # Generate the inventory file
-          sudo tee /etc/ansible/hosts > /dev/null << EOF
+          sudo tee /etc/ansible/trento-inventory.yml > /dev/null << EOF
           all:
             children:
               trento_hosts:
@@ -76,8 +79,8 @@ runs:
                   provision_proxy: true
                   web_postgres_password: "postgres"
                   wanda_postgres_password: "postgres"
-                  rabbitmq_password: "guest"
-                  web_admin_password: "adminpassword"
+                  rabbitmq_password: "admin"
+                  web_admin_password: "${{ inputs.web_admin_password }}"
                   web_port: 4000
                   wanda_port: 4001
                   trento_server_name: "{{ inventory_hostname }}"
@@ -96,6 +99,6 @@ runs:
                   trento_hosts: {}
           EOF
 
-          echo "Inventory file created at /etc/ansible/hosts"
+          echo "Inventory file created at /etc/ansible/trento-inventory.yml"
           echo "Contents:"
-          cat /etc/ansible/hosts
+          cat /etc/ansible/trento-inventory.yml
