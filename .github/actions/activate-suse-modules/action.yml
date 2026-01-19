@@ -25,7 +25,7 @@ runs:
         echo "hosts_csv=$HOSTS_CSV" >> $GITHUB_OUTPUT
         echo "Hosts to activate: $HOSTS_CSV"
 
-    - name: Activate SUSE modules on machines
+    - name: Activate SUSE modules & Install Python
       uses: appleboy/ssh-action@v1.2.4
       with:
         host: ${{ steps.prepare-hosts.outputs.hosts_csv }}
@@ -47,3 +47,10 @@ runs:
           if [[ "$VERSION_ID" == "15.6" ]]; then
             sudo SUSEConnect -p sle-module-legacy/$VERSION_ID/x86_64
           fi
+
+          # Install Python 3.11 on SP6 and SP7 for Ansible 11 compatibility (both control and target nodes)
+          if [[ "$VERSION_ID" == 15.[67] ]]; then
+            sudo zypper --non-interactive --gpg-auto-import-keys install --auto-agree-with-licenses python311-base
+          fi
+
+          
