@@ -1,4 +1,4 @@
-name: 'Activate SUSE Modules'
+name: 'Activate SUSE Modules & Install Python'
 description: 'Activate SUSE modules (basesystem, PackageHub, legacy) on machines via SSH'
 
 inputs:

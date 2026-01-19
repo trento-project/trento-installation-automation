@@ -130,7 +130,7 @@ jobs:
           registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
           registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
 
-      - name: Activate SUSE modules on machines
+      - name: Activate SUSE modules on machines & Install Python where required.
         id: activate-modules
         uses: ./.github/actions/activate-suse-modules
         with:
