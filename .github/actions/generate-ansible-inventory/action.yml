@@ -1,0 +1,98 @@
+name: 'Generate Ansible Inventory'
+description: 'Generate Ansible inventory file on control nodes with their matching target node'
+
+inputs:
+  control_hosts_fqdn_list:
+    description: 'Space-separated list of control node FQDNs'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+  ssh_private_key:
+    description: 'SSH private key content'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Convert hosts list to comma-separated format
+      id: prepare-hosts
+      shell: bash
+      run: |
+        HOSTS_FQDN_LIST="${{ inputs.control_hosts_fqdn_list }}"
+        # Convert space-separated list to comma-separated
+        HOSTS_CSV=$(echo $HOSTS_FQDN_LIST | tr ' ' ',')
+        echo "hosts_csv=$HOSTS_CSV" >> $GITHUB_OUTPUT
+        echo "Control hosts to configure: $HOSTS_CSV"
+
+    - name: Generate Ansible inventory on control nodes
+      uses: appleboy/ssh-action@v1.2.4
+      with:
+        host: ${{ steps.prepare-hosts.outputs.hosts_csv }}
+        username: ${{ inputs.ssh_username }}
+        key: ${{ inputs.ssh_private_key }}
+        script: |
+          set -e
+
+          # Get current hostname and FQDN
+          CURRENT_HOSTNAME=$(hostname)
+          CURRENT_FQDN=$(hostname -f)
+
+          # Only run on control nodes
+          if [[ "$CURRENT_HOSTNAME" != *control* ]]; then
+            echo "Skipping $CURRENT_HOSTNAME - not a control node"
+            exit 0
+          fi
+
+          # Derive target FQDN by replacing 'control' with 'target'
+          TARGET_FQDN="${CURRENT_FQDN/control/target}"
+
+          echo "Control node: $CURRENT_FQDN"
+          echo "Target node: $TARGET_FQDN"
+
+          # Determine Python interpreter based on OS version
+          source /etc/os-release
+          if [[ "$VERSION_ID" == 15.[67] ]]; then
+            PYTHON_INTERPRETER="/usr/bin/python3.11"
+          else
+            PYTHON_INTERPRETER="/usr/bin/python3"
+          fi
+          echo "Using Python interpreter: $PYTHON_INTERPRETER"
+
+          # Create Ansible inventory directory if it doesn't exist
+          sudo mkdir -p /etc/ansible
+
+          # Generate the inventory file
+          sudo tee /etc/ansible/hosts > /dev/null << EOF
+          all:
+            children:
+              trento_hosts:
+                vars:
+                  ansible_python_interpreter: $PYTHON_INTERPRETER
+                  provision_prometheus: false
+                  provision_proxy: true
+                  web_postgres_password: "postgres"
+                  wanda_postgres_password: "postgres"
+                  rabbitmq_password: "guest"
+                  web_admin_password: "adminpassword"
+                  web_port: 4000
+                  wanda_port: 4001
+                  trento_server_name: "{{ inventory_hostname }}"
+                  nginx_vhost_filename: "{{ inventory_hostname }}"
+                hosts:
+                  ${TARGET_FQDN}:
+                    ansible_user: cloudadmin
+              trento_server:
+                children:
+                  trento_hosts: {}
+              postgres_hosts:
+                children:
+                  trento_hosts: {}
+              rabbitmq_hosts:
+                children:
+                  trento_hosts: {}
+          EOF
+
+          echo "Inventory file created at /etc/ansible/hosts"
+          echo "Contents:"
+          cat /etc/ansible/hosts
