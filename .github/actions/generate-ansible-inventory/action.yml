@@ -34,15 +34,18 @@ runs:
         script: |
           set -e
 
-          # Get current hostname and FQDN
-          CURRENT_HOSTNAME=$(hostname)
-          CURRENT_FQDN=$(hostname -f)
+          # Get current hostname (short name, e.g., control15sp6rpm)
+          CURRENT_HOSTNAME=$(hostname -s)
 
           # Only run on control nodes
           if [[ "$CURRENT_HOSTNAME" != *control* ]]; then
             echo "Skipping $CURRENT_HOSTNAME - not a control node"
             exit 0
           fi
+
+          # Construct Azure public FQDN from short hostname
+          AZURE_REGION="westeurope"
+          CURRENT_FQDN="${CURRENT_HOSTNAME}.${AZURE_REGION}.cloudapp.azure.com"
 
           # Derive target FQDN by replacing 'control' with 'target'
           TARGET_FQDN="${CURRENT_FQDN/control/target}"
