@@ -26,7 +26,6 @@ runs:
         # Convert space-separated list to comma-separated
         HOSTS_CSV=$(echo $HOSTS_FQDN_LIST | tr ' ' ',')
         echo "hosts_csv=$HOSTS_CSV" >> $GITHUB_OUTPUT
-        echo "Control hosts to configure: $HOSTS_CSV"
 
     - name: Generate Ansible inventory on control nodes
       uses: appleboy/ssh-action@v1.2.4
@@ -46,7 +45,6 @@ runs:
 
           # Only run on control nodes
           if [[ "$CURRENT_HOSTNAME" != *control* ]]; then
-            echo "Skipping $CURRENT_HOSTNAME - not a control node"
             exit 0
           fi
 
@@ -57,9 +55,6 @@ runs:
           # Derive target FQDN by replacing 'control' with 'target'
           TARGET_FQDN="${CURRENT_FQDN/control/target}"
 
-          echo "Control node: $CURRENT_FQDN"
-          echo "Target node: $TARGET_FQDN"
-
           # Determine Python interpreter based on OS version
           source /etc/os-release
           if [[ "$VERSION_ID" == 15.[67] ]]; then
@@ -67,7 +62,6 @@ runs:
           else
             PYTHON_INTERPRETER="/usr/bin/python3"
           fi
-          echo "Using Python interpreter: $PYTHON_INTERPRETER"
 
           # Create Ansible inventory directory if it doesn't exist
           sudo mkdir -p /etc/ansible
@@ -102,7 +96,3 @@ runs:
                 children:
                   trento_hosts: {}
           EOF
-
-          echo "Inventory file created at /etc/ansible/trento-inventory.yml"
-          echo "Contents:"
-          cat /etc/ansible/trento-inventory.yml
