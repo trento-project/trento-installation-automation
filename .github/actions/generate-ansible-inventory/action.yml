@@ -30,10 +30,14 @@ runs:
 
     - name: Generate Ansible inventory on control nodes
       uses: appleboy/ssh-action@v1.2.4
+      env:
+        SSH_USERNAME: ${{ inputs.ssh_username }}
+        WEB_ADMIN_PASSWORD: ${{ inputs.web_admin_password }}
       with:
         host: ${{ steps.prepare-hosts.outputs.hosts_csv }}
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
+        envs: SSH_USERNAME,WEB_ADMIN_PASSWORD
         script: |
           set -e
 
@@ -80,14 +84,14 @@ runs:
                   web_postgres_password: "postgres"
                   wanda_postgres_password: "postgres"
                   rabbitmq_password: "admin"
-                  web_admin_password: "${{ inputs.web_admin_password }}"
+                  web_admin_password: "$WEB_ADMIN_PASSWORD"
                   web_port: 4000
                   wanda_port: 4001
                   trento_server_name: "{{ inventory_hostname }}"
                   nginx_vhost_filename: "{{ inventory_hostname }}"
                 hosts:
                   ${TARGET_FQDN}:
-                    ansible_user: cloudadmin
+                    ansible_user: $SSH_USERNAME
               trento_server:
                 children:
                   trento_hosts: {}
