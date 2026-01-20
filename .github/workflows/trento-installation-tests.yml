@@ -130,7 +130,7 @@ jobs:
           registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
           registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
 
-      - name: Activate SUSE modules on machines
+      - name: Activate SUSE modules on machines & Install Python where required.
         id: activate-modules
         uses: ./.github/actions/activate-suse-modules
         with:
@@ -147,6 +147,15 @@ jobs:
           azure_blob_storage: ${{ env.AZURE_BLOB_STORAGE }}
           azure_blob_storage_container: ${{ env.AZURE_BLOB_STORAGE_CONTAINER }}
           azure_blob_storage_sas_token: ${{ secrets.AZURE_BLOB_STORAGE_SAS_TOKEN }}
+
+      - name: Generate Ansible inventory on control nodes
+        id: generate-inventory
+        uses: ./.github/actions/generate-ansible-inventory
+        with:
+          control_hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
 
       - name: Upload logs
         if: always()

@@ -8,4 +8,3 @@ target,15,6,rpm
 control,15,7,rpm
 target,15,7,rpm
 helm,15,7,rpm
-sles,16,0,rpm
