@@ -2,8 +2,8 @@ name: 'Register SUSE Machines, Activate Modules & Install Python'
 description: 'Register machines with SUSEConnect, activate SUSE modules (basesystem, PackageHub, legacy), and install Python via SSH'
 
 inputs:
-  hosts_fqdn_list:
-    description: 'Space-separated list of machine FQDNs'
+  hosts_fqdn_csv:
+    description: 'Comma-separated list of machine FQDNs'
     required: true
   ssh_username:
     description: 'SSH username'
@@ -21,20 +21,10 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Convert hosts list to comma-separated format
-      id: prepare-hosts
-      shell: bash
-      run: |
-        HOSTS_FQDN_LIST="${{ inputs.hosts_fqdn_list }}"
-        # Convert space-separated list to comma-separated
-        HOSTS_CSV=$(echo $HOSTS_FQDN_LIST | tr ' ' ',')
-        echo "hosts_csv=$HOSTS_CSV" >> $GITHUB_OUTPUT
-        echo "Hosts to activate: $HOSTS_CSV"
-
     - name: Activate SUSE modules & Install Python
       uses: appleboy/ssh-action@v1.2.4
       with:
-        host: ${{ steps.prepare-hosts.outputs.hosts_csv }}
+        host: ${{ inputs.hosts_fqdn_csv }}
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
         script: |

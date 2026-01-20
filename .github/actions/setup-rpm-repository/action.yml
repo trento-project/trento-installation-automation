@@ -2,8 +2,8 @@ name: 'Setup RPM Repository'
 description: 'Setup local RPM repository on control and target machines from Azure blob storage'
 
 inputs:
-  hosts_fqdn_list:
-    description: 'Space-separated list of machine FQDNs'
+  hosts_fqdn_csv:
+    description: 'Comma-separated list of machine FQDNs'
     required: true
   ssh_username:
     description: 'SSH username'
@@ -24,30 +24,10 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Filter and prepare hosts list
-      id: prepare-hosts
-      shell: bash
-      run: |
-        HOSTS_FQDN_LIST="${{ inputs.hosts_fqdn_list }}"
-
-        # Filter hosts to only include control and target machines
-        target_hosts=""
-        for host in $HOSTS_FQDN_LIST; do
-          hostname_base="${host%%.*}"
-          if [[ "$hostname_base" == control* ]] || [[ "$hostname_base" == target* ]]; then
-            target_hosts="$target_hosts $host"
-          fi
-        done
-
-        # Trim and convert to comma-separated
-        HOSTS_CSV=$(echo $target_hosts | xargs | tr ' ' ',')
-        echo "hosts_csv=$HOSTS_CSV" >> $GITHUB_OUTPUT
-
     - name: Setup RPM repository on machines
-      if: steps.prepare-hosts.outputs.hosts_csv != ''
       uses: appleboy/ssh-action@v1.2.4
       with:
-        host: ${{ steps.prepare-hosts.outputs.hosts_csv }}
+        host: ${{ inputs.hosts_fqdn_csv }}
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
         script: |
@@ -55,13 +35,10 @@ runs:
 
           HOSTNAME=$(hostname)
 
-          # Extract SLES version from hostname (e.g., control15sp4rpm -> 15, 4)
-          if [[ "$HOSTNAME" =~ ([0-9]+)sp([0-9]+) ]]; then
-            SLES_MAJOR_VERSION="${BASH_REMATCH[1]}"
-            SP_VERSION="${BASH_REMATCH[2]}"
-          else
-            exit 1
-          fi
+          # Extract SLES version from /etc/os-release (e.g., VERSION_ID="15.4")
+          source /etc/os-release
+          SLES_MAJOR_VERSION="${VERSION_ID%%.*}"
+          SP_VERSION="${VERSION_ID##*.}"
 
           # Build version-specific blob storage URL
           URL_BASE="https://${{ inputs.azure_blob_storage }}.blob.core.windows.net/${{ inputs.azure_blob_storage_container }}"

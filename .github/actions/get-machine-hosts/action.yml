@@ -11,9 +11,9 @@ inputs:
     required: true
 
 outputs:
-  hosts_fqdn_list:
-    description: 'Space-separated list of machine FQDNs'
-    value: ${{ steps.generate.outputs.hosts_fqdn_list }}
+  hosts_fqdn_csv:
+    description: 'Comma-separated list of control and target machine FQDNs'
+    value: ${{ steps.generate.outputs.hosts_fqdn_csv }}
 
 runs:
   using: 'composite'
@@ -39,7 +39,7 @@ runs:
         fi
         echo "Using location: $LOCATION"
 
-        # Generate hostname list from CSV
+        # Generate hostname list from CSV (only control and target machines)
         hosts_array=()
         while IFS=, read -r prefix slesVersion spVersion suffix; do
           # Skip header and empty lines
@@ -53,7 +53,8 @@ runs:
           spVersion=$(echo "$spVersion" | tr -d '\r' | xargs)
           suffix=$(echo "$suffix" | tr -d '\r' | xargs)
 
-          if [ -n "$prefix" ]; then
+          # Only include control and target machines
+          if [[ "$prefix" == control* ]] || [[ "$prefix" == target* ]]; then
             vm_name="${prefix}${slesVersion}sp${spVersion}${suffix}"
             hosts_array+=("$vm_name")
           fi
@@ -61,18 +62,18 @@ runs:
 
         # Check if we found any hosts
         if [ ${#hosts_array[@]} -eq 0 ]; then
-          echo "Error: No machines found in $CSV_FILE"
+          echo "Error: No control or target machines found in $CSV_FILE"
           exit 1
         fi
 
-        # Generate FQDN list with location
+        # Generate comma-separated FQDN list with location
         fqdn_array=()
         for host in "${hosts_array[@]}"; do
           fqdn_array+=("${host}.${LOCATION}.cloudapp.azure.com")
         done
-        hosts_fqdn_list="${fqdn_array[*]}"
+        hosts_fqdn_csv=$(IFS=','; echo "${fqdn_array[*]}")
 
         # Set output
-        echo "hosts_fqdn_list=$hosts_fqdn_list" >> $GITHUB_OUTPUT
+        echo "hosts_fqdn_csv=$hosts_fqdn_csv" >> $GITHUB_OUTPUT
 
-        echo "Generated FQDN list for ${#hosts_array[@]} machines"
+        echo "Generated FQDN list for ${#hosts_array[@]} machines: $hosts_fqdn_csv"
