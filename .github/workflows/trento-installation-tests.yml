@@ -114,29 +114,22 @@ jobs:
           csv_file: .machines.conf.csv
           azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
 
-      - name: Wait for SSH to be ready
-        id: wait-ssh
-        uses: ./.github/actions/wait-for-ssh
-        with:
-          hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
-          ssh_username: ${{ env.SSH_USERNAME }}
+      # - name: Wait for SSH to be ready
+      #   id: wait-ssh
+      #   uses: ./.github/actions/wait-for-ssh
+      #   with:
+      #     hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
+      #     ssh_username: ${{ env.SSH_USERNAME }}
 
-      - name: Register machines with SUSEConnect
-        id: register
-        uses: ./.github/actions/register-suse-machines
-        with:
-          hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
-          ssh_username: ${{ env.SSH_USERNAME }}
-          registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
-          registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
-
-      - name: Activate SUSE modules on machines & Install Python where required.
+      - name: Register SUSE machines, activate modules & install Python
         id: activate-modules
-        uses: ./.github/actions/activate-suse-modules
+        uses: ./.github/actions/activate-suse-modules-and-install-python
         with:
           hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
           ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
+          registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
 
       - name: Setup RPM repository on machines
         id: setup-rpm-repo

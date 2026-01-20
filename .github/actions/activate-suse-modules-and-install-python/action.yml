@@ -1,15 +1,21 @@
-name: 'Activate SUSE Modules & Install Python'
-description: 'Activate SUSE modules (basesystem, PackageHub, legacy) on machines via SSH'
+name: 'Register SUSE Machines, Activate Modules & Install Python'
+description: 'Register machines with SUSEConnect, activate SUSE modules (basesystem, PackageHub, legacy), and install Python via SSH'
 
 inputs:
   hosts_fqdn_list:
-    description: 'Space-separated list of machine FQDNs to activate modules on'
+    description: 'Space-separated list of machine FQDNs'
     required: true
   ssh_username:
     description: 'SSH username'
     required: true
   ssh_private_key:
     description: 'SSH private key content'
+    required: true
+  registration_code:
+    description: 'SUSE registration code'
+    required: true
+  registration_email:
+    description: 'SUSE registration email'
     required: true
 
 runs:
@@ -41,6 +47,7 @@ runs:
             exit 0
           fi
 
+          sudo SUSEConnect -r '${{ inputs.registration_code }}' -e '${{ inputs.registration_email }}'
           sudo SUSEConnect -p sle-module-basesystem/$VERSION_ID/x86_64
           sudo SUSEConnect -p PackageHub/$VERSION_ID/x86_64
 
