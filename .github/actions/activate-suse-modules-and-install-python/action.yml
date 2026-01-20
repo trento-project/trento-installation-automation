@@ -52,5 +52,3 @@ runs:
           if [[ "$VERSION_ID" == 15.[67] ]]; then
             sudo zypper --non-interactive --gpg-auto-import-keys install --no-recommends --auto-agree-with-licenses python311-base
           fi
-
-          
