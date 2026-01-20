@@ -43,9 +43,6 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           chmod 644 ~/.ssh/id_rsa.pub
 
-      - name: Create logs directory
-        run: mkdir -p logs
-
       - name: Azure Login
         uses: azure/login@v2
         with:
