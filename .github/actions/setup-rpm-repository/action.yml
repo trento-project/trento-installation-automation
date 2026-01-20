@@ -76,7 +76,7 @@ runs:
             # Control nodes: just download and install ansible-trento directly
             TEMP_DIR=$(mktemp -d)
             azcopy cp "$URL_BASE/$SLES_MAJOR_VERSION/$SP_VERSION/*?${{ inputs.azure_blob_storage_sas_token }}" "$TEMP_DIR" --recursive=true --include-pattern "ansible-trento-*.rpm"
-            sudo zypper --non-interactive --gpg-auto-import-keys install --auto-agree-with-licenses "$TEMP_DIR"/ansible-trento-*.rpm
+            sudo zypper --non-interactive --gpg-auto-import-keys install --allow-unsigned-rpm --auto-agree-with-licenses "$TEMP_DIR"/ansible-trento-*.rpm
             rm -rf "$TEMP_DIR"
           else
             # Target nodes: setup full local RPM repository
