@@ -26,7 +26,7 @@ jobs:
       contents: read
 
     env:
-      SSH_USERNAME: ${{ vars.SSH_USERNAME }}
+      SSH_USERNAME: cloudadmin
 
     steps:
       - name: Checkout repository
