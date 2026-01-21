@@ -35,7 +35,7 @@ runs:
           CURRENT_HOSTNAME=$(hostname -s)
 
           # Only run on control nodes
-          if [[ "$CURRENT_HOSTNAME" != control* ]]; then
+          if [[ "$CURRENT_HOSTNAME" != *control* ]]; then
             exit 0
           fi
 
