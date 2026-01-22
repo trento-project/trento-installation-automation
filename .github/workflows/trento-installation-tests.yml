@@ -8,6 +8,10 @@ on:
         type: boolean
         default: true
 
+concurrency:
+  group: trento-installation-tests
+  cancel-in-progress: false
+
 env:
   AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
   AZURE_BLOB_STORAGE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_CONTAINER }}
@@ -28,6 +32,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Write machines config from env var
+        run: echo "${{ vars.MACHINES_CONFIG_CSV }}" > .machines.conf.csv
+
       - name: Setup SSH keys
         run: |
           mkdir -p ~/.ssh
@@ -35,9 +42,6 @@ jobs:
           echo "${{ vars.PUBLIC_SSH_KEY_CONTENT }}" > ~/.ssh/id_rsa.pub
           chmod 600 ~/.ssh/id_rsa
           chmod 644 ~/.ssh/id_rsa.pub
-
-      - name: Create logs directory
-        run: mkdir -p logs
 
       - name: Azure Login
         uses: azure/login@v2
@@ -114,36 +118,23 @@ jobs:
           csv_file: .machines.conf.csv
           azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
 
-      - name: Wait for SSH to be ready
-        id: wait-ssh
-        uses: ./.github/actions/wait-for-ssh
-        with:
-          hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
-          ssh_username: ${{ env.SSH_USERNAME }}
-
-      - name: Register machines with SUSEConnect
-        id: register
-        uses: ./.github/actions/register-suse-machines
-        with:
-          hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
-          ssh_username: ${{ env.SSH_USERNAME }}
-          registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
-          registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
-
-      - name: Activate SUSE modules on machines & Install Python where required.
+      - name: Register SUSE machines & activate modules & install Python
         id: activate-modules
-        uses: ./.github/actions/activate-suse-modules
+        uses: ./.github/actions/suse-register-modules-activation-python311-install
         with:
-          hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
+          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
           ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
+          registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
 
       - name: Setup RPM repository on machines
         id: setup-rpm-repo
         uses: ./.github/actions/setup-rpm-repository
         with:
-          hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
+          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
           ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           azure_blob_storage: ${{ env.AZURE_BLOB_STORAGE }}
           azure_blob_storage_container: ${{ env.AZURE_BLOB_STORAGE_CONTAINER }}
           azure_blob_storage_sas_token: ${{ secrets.AZURE_BLOB_STORAGE_SAS_TOKEN }}
@@ -152,19 +143,10 @@ jobs:
         id: generate-inventory
         uses: ./.github/actions/generate-ansible-inventory
         with:
-          control_hosts_fqdn_list: ${{ steps.get-hosts.outputs.hosts_fqdn_list }}
+          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
           ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
-
-      - name: Upload logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: logs
-          path: logs/
-          if-no-files-found: warn
-          retention-days: 1
           
       - name: Terraform Destroy
         if: inputs.destroy_after
