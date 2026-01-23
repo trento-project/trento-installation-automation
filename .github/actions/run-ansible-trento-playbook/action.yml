@@ -40,4 +40,4 @@ runs:
           fi
 
           # Run Ansible playbook using FQCN (collection installed via trento-ansible package)
-          ansible-playbook -i "$INVENTORY_FILE" suse.trento.site
+          ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i "$INVENTORY_FILE" suse.trento.site
