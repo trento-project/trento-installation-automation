@@ -47,14 +47,6 @@ runs:
           # Derive target FQDN by replacing 'control' with 'target'
           TARGET_FQDN="${CURRENT_FQDN/control/target}"
 
-          # Determine Python interpreter based on OS version
-          source /etc/os-release
-          if [[ "$VERSION_ID" == 15.[67] ]]; then
-            PYTHON_INTERPRETER="/usr/bin/python3.11"
-          else
-            PYTHON_INTERPRETER="/usr/bin/python3"
-          fi
-
           # Setup SSH private key for Ansible to connect to target nodes
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
@@ -76,7 +68,7 @@ runs:
             children:
               trento_hosts:
                 vars:
-                  ansible_python_interpreter: $PYTHON_INTERPRETER
+                  ansible_python_interpreter: "/usr/bin/python3.11"
                   provision_prometheus: false
                   provision_proxy: true
                   web_postgres_password: "postgres"
