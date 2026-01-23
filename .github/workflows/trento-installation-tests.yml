@@ -141,7 +141,7 @@ jobs:
 
       - name: Generate Ansible inventory on control nodes
         id: generate-inventory
-        uses: ./.github/actions/generate-ansible-inventory
+        uses: ./.github/actions/ansible-playbook-preparations
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
           ssh_username: ${{ env.SSH_USERNAME }}
