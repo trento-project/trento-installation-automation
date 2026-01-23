@@ -35,11 +35,12 @@ runs:
           source /etc/os-release
 
           # Python/Ansible Compatibility Matrix (https://github.com/trento-project/ansible#support-matrix)
-          # SLES 15 SP4/SP5: Ansible 9 (ansible-core 2.16.*) with Python 3.6
+          # SLES 15 SP4/SP5: Ansible 9 (ansible-core 2.16.*) with Python 3.11
           # SLES 15 SP6/SP7: Ansible 11 (ansible-core 2.18.*) with Python 3.11
+          # Note: ansible-core 2.16+ requires Python 3.10+, so we use Python 3.11 for all versions
           case "$VERSION_ID" in
             15.4|15.5)
-              PYTHON_EXEC="/usr/bin/python3"
+              PYTHON_EXEC="/usr/bin/python3.11"
               ANSIBLE_CORE_VERSION="2.16.*"
               ;;
             15.6|15.7)
