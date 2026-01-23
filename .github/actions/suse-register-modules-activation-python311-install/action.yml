@@ -46,5 +46,5 @@ runs:
           fi
 
           # Install Python 3.11 for Ansible 11 compatibility (both control and target nodes)            
-          sudo zypper --non-interactive --gpg-auto-import-keys install --no-recommends --auto-agree-with-licenses python311-base
+          # sudo zypper --non-interactive --gpg-auto-import-keys install --no-recommends --auto-agree-with-licenses python311-base
 

@@ -68,7 +68,7 @@ runs:
             children:
               trento_hosts:
                 vars:
-                  ansible_python_interpreter: "/usr/bin/python3.11"
+                  # ansible_python_interpreter: "/usr/bin/python3.11"
                   provision_prometheus: false
                   provision_proxy: true
                   web_postgres_password: "postgres"
