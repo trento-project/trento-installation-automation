@@ -43,7 +43,7 @@ runs:
           rm -rf .venv-ansible
 
           # Crea el venv usando el Python del sistema (3.6)
-          python3 -m venv .venv-ansible
+          /usr/bin/python3.11 -m venv .venv-ansible
 
           # Actívalo
           source .venv-ansible/bin/activate
