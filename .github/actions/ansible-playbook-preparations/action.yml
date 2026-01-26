@@ -53,9 +53,9 @@ runs:
           chmod 600 ~/.ssh/id_rsa
 
           # Generate SSL certificate for nginx
-          CERTS_DIR="/etc/ssl/trento"
-          sudo mkdir -p "$CERTS_DIR"
-          sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+          CERTS_DIR="$HOME/.ssl"
+          mkdir -p "$CERTS_DIR"
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
             -keyout "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.crt" \
             -subj "/CN=${TARGET_FQDN}" -addext "subjectAltName=DNS:${TARGET_FQDN}"
 
