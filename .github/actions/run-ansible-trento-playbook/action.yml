@@ -49,7 +49,7 @@ runs:
           source .venv-ansible/bin/activate
 
           # Instala Ansible 9 (Core 2.16)
-          pip install "ansible-core==2.16.*"
+          pip install --quiet "ansible==9.*"
 
           # CONECTAR CON TUS ROLES RPM (Vital para Trento)
           # Esto permite que tu Ansible aislado vea los roles instalados en /usr/share
