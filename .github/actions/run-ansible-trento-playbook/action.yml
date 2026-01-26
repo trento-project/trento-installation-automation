@@ -18,8 +18,7 @@ runs:
     - name: Run Ansible Trento playbook on control nodes
       uses: appleboy/ssh-action@v1.2.4
       with:
-        # host: "control15sp4rpm.westeurope.cloudapp.azure.com,control15sp5rpm.westeurope.cloudapp.azure.com"
-        host: control15sp7rpm.westeurope.cloudapp.azure.com
+        host: ${{ inputs.hosts_fqdn_csv }}
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
         command_timeout: 30m
@@ -40,7 +39,7 @@ runs:
             exit 1
           fi
 
-          # Use venv with ansible 9 only on SP4/SP5 (python3.11 available)
+          # Use venv with ansible 9 only on SP4/SP5
           if [[ "$CURRENT_HOSTNAME" == *sp4* || "$CURRENT_HOSTNAME" == *sp5* ]]; then
             rm -rf .venv-ansible
             /usr/bin/python3.11 -m venv .venv-ansible
