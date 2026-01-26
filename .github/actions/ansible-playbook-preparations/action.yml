@@ -65,7 +65,7 @@ runs:
           # Set python interpreter line only for SP4/SP5
           PYTHON_INTERPRETER_LINE=""
           if [[ "$CURRENT_HOSTNAME" == *sp4* || "$CURRENT_HOSTNAME" == *sp5* ]]; then
-            PYTHON_INTERPRETER_LINE='ansible_python_interpreter: "/usr/bin/python3.11"'
+            PYTHON_INTERPRETER_LINE='ansible_python_interpreter: "/usr/bin/python3"'
           fi
 
           # Generate the inventory file
