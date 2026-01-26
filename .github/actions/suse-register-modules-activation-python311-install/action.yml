@@ -45,6 +45,10 @@ runs:
             sudo SUSEConnect -p sle-module-legacy/$VERSION_ID/x86_64
           fi
 
+          if [[ "$VERSION_ID" == "15.4" ]] && [[ "$(hostname)" == target* ]]; then
+            sudo SUSEConnect -p sle-module-python3/$VERSION_ID/x86_64
+          fi
+
           # Install Python 3.11 for Ansible 11 compatibility (both control and target nodes)            
           # sudo zypper --non-interactive --gpg-auto-import-keys install --no-recommends --auto-agree-with-licenses python311-base
 
