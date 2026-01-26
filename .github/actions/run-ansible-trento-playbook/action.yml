@@ -40,7 +40,6 @@ runs:
           fi
 
           # Use venv with ansible 9 only on SP4/SP5 (python3.11 available)
-          echo "$CURRENT_HOSTNAME"
           if [[ "$CURRENT_HOSTNAME" == *sp4* || "$CURRENT_HOSTNAME" == *sp5* ]]; then
             rm -rf .venv-ansible
             /usr/bin/python3.11 -m venv .venv-ansible
