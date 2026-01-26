@@ -39,5 +39,22 @@ runs:
             exit 1
           fi
 
+          # Borra el venv anterior si existía para empezar limpio
+          rm -rf .venv-ansible
+
+          # Crea el venv usando el Python del sistema (3.6)
+          python3 -m venv .venv-ansible
+
+          # Actívalo
+          source .venv-ansible/bin/activate
+
+          # Instala Ansible 9 (Core 2.16)
+          pip install "ansible-core==2.16.*"
+
+          # CONECTAR CON TUS ROLES RPM (Vital para Trento)
+          # Esto permite que tu Ansible aislado vea los roles instalados en /usr/share
+          export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
+          export ANSIBLE_ROLES_PATH=/usr/share/ansible/roles
+
           # Run Ansible playbook using FQCN (collection installed via trento-ansible package)
           ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i "$INVENTORY_FILE" suse.trento.site
