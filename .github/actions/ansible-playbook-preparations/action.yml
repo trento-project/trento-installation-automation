@@ -62,13 +62,19 @@ runs:
           # Create Ansible inventory directory if it doesn't exist
           sudo mkdir -p /etc/ansible
 
+          # Set python interpreter line only for SP4/SP5
+          PYTHON_INTERPRETER_LINE=""
+          if [[ "$CURRENT_HOSTNAME" == *sp4* || "$CURRENT_HOSTNAME" == *sp5* ]]; then
+            PYTHON_INTERPRETER_LINE='ansible_python_interpreter: "/usr/bin/python3.11"'
+          fi
+
           # Generate the inventory file
           sudo tee /etc/ansible/trento-inventory.yml > /dev/null << EOF
           all:
             children:
               trento_hosts:
                 vars:
-                  ansible_python_interpreter: "/usr/bin/python3"
+                  ${PYTHON_INTERPRETER_LINE}
                   provision_prometheus: false
                   provision_proxy: true
                   web_postgres_password: "postgres"

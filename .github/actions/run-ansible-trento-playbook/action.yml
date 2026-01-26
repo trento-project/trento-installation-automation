@@ -18,7 +18,7 @@ runs:
     - name: Run Ansible Trento playbook on control nodes
       uses: appleboy/ssh-action@v1.2.4
       with:
-        host: control15sp4rpm.westeurope.cloudapp.azure.com
+        host: "control15sp4rpm.westeurope.cloudapp.azure.com,control15sp5rpm.westeurope.cloudapp.azure.com"
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
         command_timeout: 30m
@@ -39,15 +39,15 @@ runs:
             exit 1
           fi
 
-          rm -rf .venv-ansible
-
-          /usr/bin/python3.11 -m venv .venv-ansible
-
-          source .venv-ansible/bin/activate
-
-          pip install --quiet "ansible==9.*"
-
+          # Use venv with ansible 9 only on SP4/SP5 (python3.11 available)
+          if [[ "$CURRENT_HOSTNAME" == *sp4* || "$CURRENT_HOSTNAME" == *sp5* ]]; then
+            rm -rf .venv-ansible
+            /usr/bin/python3.11 -m venv .venv-ansible
+            source .venv-ansible/bin/activate
+            pip install --quiet "ansible==9.*"
+          
           export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
           export ANSIBLE_ROLES_PATH=/usr/share/ansible/roles
+          fi
 
           ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i "$INVENTORY_FILE" suse.trento.site
