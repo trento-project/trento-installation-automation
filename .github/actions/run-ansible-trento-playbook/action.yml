@@ -22,11 +22,7 @@ runs:
             INVENTORY_FILE="/etc/ansible/trento-inventory.yml"
 
             # Setup for SLES 15 SP4 (Legacy Ansible 2.9 + Manual Collections)
-            if [[ "$CURRENT_HOSTNAME" == *sp4* ]]; then          
-              echo "Standardizing environment: Ensuring Ansible 2.9 and required collections..."
-              
-              # Ensure Ansible 2.9 is active. 
-              # We use '|| true' because if ansible-core is already gone, zypper might return a warning.
+            if [[ "$CURRENT_HOSTNAME" == *sp5* ]]; then                        
               sudo zypper --non-interactive install --oldpackage --allow-vendor-change --force-resolution "ansible<3" -ansible-core || true
               
               # Install the full 'Trento Support Bundle' of collections
@@ -41,12 +37,9 @@ runs:
                 -p /usr/share/ansible/collections --force
             fi
 
-            # Export paths so Ansible 2.9 can find the Galaxy collections
             export ANSIBLE_COLLECTIONS_PATHS=/usr/share/ansible/collections
             export ANSIBLE_ROLES_PATH=/usr/share/ansible/roles
 
-            # Execute the playbook using its absolute path
-            # Reminder: The inventory must use /usr/bin/python3 (3.6) for system modules to work
             ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
               -i "$INVENTORY_FILE" \
               /usr/share/ansible/collections/ansible_collections/suse/trento/playbooks/site.yml
