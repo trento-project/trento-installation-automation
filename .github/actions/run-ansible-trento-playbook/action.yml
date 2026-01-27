@@ -46,4 +46,4 @@ runs:
 
             ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
               -i "$INVENTORY_FILE" \
-              suse.trento.site
+              /usr/share/ansible/collections/ansible_collections/suse/trento/playbooks/site.yml
