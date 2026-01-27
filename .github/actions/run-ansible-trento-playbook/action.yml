@@ -18,36 +18,32 @@ runs:
     - name: Run Ansible Trento playbook on control nodes
       uses: appleboy/ssh-action@v1.2.4
       with:
-        host: ${{ inputs.hosts_fqdn_csv }}
+        # host: ${{ inputs.hosts_fqdn_csv }}
+        host: control15sp4rpm.westeurope.cloudapp.azure.com
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
         command_timeout: 30m
         script: |
-          set -e
+            set -e
 
-          CURRENT_HOSTNAME=$(hostname -s)
+            CURRENT_HOSTNAME=$(hostname -s)
 
-          # Only run on control nodes
-          if [[ "$CURRENT_HOSTNAME" != *control* ]]; then
-            exit 0
-          fi
+            # Only run on control nodes
+            if [[ "$CURRENT_HOSTNAME" != *control* ]]; then
+              exit 0
+            fi
 
-          INVENTORY_FILE="/etc/ansible/trento-inventory.yml"
+            INVENTORY_FILE="/etc/ansible/trento-inventory.yml"
 
-          if [ ! -f "$INVENTORY_FILE" ]; then
-            echo "ERROR: Inventory file not found at $INVENTORY_FILE"
-            exit 1
-          fi
+            if [ ! -f "$INVENTORY_FILE" ]; then
+              echo "ERROR: Inventory file not found at $INVENTORY_FILE"
+              exit 1
+            fi
 
-          # Use venv with ansible 9 only on SP4/SP5
-          if [[ "$CURRENT_HOSTNAME" == *sp4* || "$CURRENT_HOSTNAME" == *sp5* ]]; then
-            rm -rf .venv-ansible
-            /usr/bin/python3.11 -m venv .venv-ansible
-            source .venv-ansible/bin/activate
-            pip install --quiet "ansible==9.*"
-          
-          export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
-          export ANSIBLE_ROLES_PATH=/usr/share/ansible/roles
-          fi
+            if [ "$CURRENT_HOSTNAME" == *sp4* ]; then          
+              sudo zypper in -y --from PackageHub --allow-vendor-change ansible
+            fi
 
-          ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i "$INVENTORY_FILE" suse.trento.site
+            ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
+              -i "$INVENTORY_FILE" \
+              suse.trento.site
