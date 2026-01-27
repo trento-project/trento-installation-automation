@@ -26,7 +26,14 @@ runs:
               
               # 2. Install ALL collections Trento might need
               sudo mkdir -p /usr/share/ansible/collections
-              sudo ansible-galaxy collection install community.general community.postgresql ansible.posix -p /usr/share/ansible/collections --force
+              # The 'Trento Starter Pack' for Ansible 2.9
+              sudo ansible-galaxy collection install \
+                community.general \
+                community.postgresql \
+                community.rabbitmq \
+                community.crypto \
+                ansible.posix \
+                -p /usr/share/ansible/collections --force
             fi
 
             export ANSIBLE_COLLECTIONS_PATHS=/usr/share/ansible/collections
