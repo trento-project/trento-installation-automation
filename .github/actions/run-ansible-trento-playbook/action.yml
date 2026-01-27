@@ -44,6 +44,9 @@ runs:
               sudo zypper --non-interactive install --oldpackage --allow-vendor-change --force-resolution "ansible<3" -ansible-core
             fi
 
+            export ANSIBLE_COLLECTIONS_PATHS=/usr/share/ansible/collections
+            export ANSIBLE_ROLES_PATH=/usr/share/ansible/roles
+
             ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
               -i "$INVENTORY_FILE" \
               /usr/share/ansible/collections/ansible_collections/suse/trento/playbooks/site.yml
