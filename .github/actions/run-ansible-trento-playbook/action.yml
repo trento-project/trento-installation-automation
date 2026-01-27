@@ -12,33 +12,26 @@ runs:
             set -e
 
             CURRENT_HOSTNAME=$(hostname -s)
-
-            # Only execute tasks on nodes identified as control nodes
             if [[ "$CURRENT_HOSTNAME" != *control* ]]; then
-              echo "Info: $CURRENT_HOSTNAME is not a control node. Skipping."
               exit 0
             fi
 
             INVENTORY_FILE="/etc/ansible/trento-inventory.yml"
 
-            # Safety check: Ensure the inventory file exists before proceeding
-            if [ ! -f "$INVENTORY_FILE" ]; then
-              echo "ERROR: Inventory file not found at $INVENTORY_FILE"
-              exit 1
-            fi
-
-            # Specific setup for SLES 15 SP4 to ensure compatibility with Python 3.6
-            if [[ "$CURRENT_HOSTNAME" == *sp4* ]]; then                        
+            if [[ "$CURRENT_HOSTNAME" == *sp4* ]]; then          
+              echo "Standardizing environment: Ansible 2.9 + Essential Collections"
+              
+              # 1. Downgrade engine
               sudo zypper --non-interactive install --oldpackage --allow-vendor-change --force-resolution "ansible<3" -ansible-core
+              
+              # 2. Install ALL collections Trento might need
               sudo mkdir -p /usr/share/ansible/collections
-              sudo ansible-galaxy collection install community.general -p /usr/share/ansible/collections --force
+              sudo ansible-galaxy collection install community.general community.postgresql ansible.posix -p /usr/share/ansible/collections --force
             fi
 
-            # Export environment variables so Ansible 2.9 can locate the collections and roles
             export ANSIBLE_COLLECTIONS_PATHS=/usr/share/ansible/collections
             export ANSIBLE_ROLES_PATH=/usr/share/ansible/roles
 
-            # Execute the playbook using its absolute path (Ansible 2.9 requirement)
             ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
               -i "$INVENTORY_FILE" \
               /usr/share/ansible/collections/ansible_collections/suse/trento/playbooks/site.yml
