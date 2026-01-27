@@ -4,7 +4,7 @@ runs:
     - name: Run Ansible Trento playbook on control nodes
       uses: appleboy/ssh-action@v1.2.4
       with:
-        host: control15sp4rpm.westeurope.cloudapp.azure.com
+        host: control15sp5rpm.westeurope.cloudapp.azure.com
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
         command_timeout: 30m
