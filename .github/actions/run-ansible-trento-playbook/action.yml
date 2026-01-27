@@ -42,6 +42,7 @@ runs:
 
             if [ "$CURRENT_HOSTNAME" == *sp4* ]; then          
               sudo zypper --non-interactive install --oldpackage --allow-vendor-change --force-resolution "ansible<3" -ansible-core
+              sudo zypper in -y ansible-collection-community-general
             fi
 
             export ANSIBLE_COLLECTIONS_PATHS=/usr/share/ansible/collections
