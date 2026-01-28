@@ -141,13 +141,20 @@ jobs:
 
       - name: Generate Ansible inventory on control nodes
         id: generate-inventory
-        uses: ./.github/actions/generate-ansible-inventory
+        uses: ./.github/actions/ansible-playbook-preparations
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
           ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
-          
+
+      - name: Run Ansible Trento playbook
+        uses: ./.github/actions/run-ansible-trento-playbook
+        with:
+          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+
       - name: Terraform Destroy
         if: inputs.destroy_after
         uses: ./.github/actions/terraform-destroy

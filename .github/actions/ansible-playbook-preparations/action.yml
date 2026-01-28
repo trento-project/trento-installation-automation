@@ -22,12 +22,13 @@ runs:
       uses: appleboy/ssh-action@v1.2.4
       env:
         SSH_USERNAME: ${{ inputs.ssh_username }}
+        SSH_PRIVATE_KEY: ${{ inputs.ssh_private_key }}
         WEB_ADMIN_PASSWORD: ${{ inputs.web_admin_password }}
       with:
         host: ${{ inputs.hosts_fqdn_csv }}
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
-        envs: SSH_USERNAME,WEB_ADMIN_PASSWORD
+        envs: SSH_USERNAME,SSH_PRIVATE_KEY,WEB_ADMIN_PASSWORD
         script: |
           set -e
 
@@ -46,16 +47,26 @@ runs:
           # Derive target FQDN by replacing 'control' with 'target'
           TARGET_FQDN="${CURRENT_FQDN/control/target}"
 
-          # Determine Python interpreter based on OS version
-          source /etc/os-release
-          if [[ "$VERSION_ID" == 15.[67] ]]; then
-            PYTHON_INTERPRETER="/usr/bin/python3.11"
-          else
-            PYTHON_INTERPRETER="/usr/bin/python3"
-          fi
+          # Setup SSH private key for Ansible to connect to target nodes
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          # Generate SSL certificate for nginx
+          CERTS_DIR="$HOME/.ssl"
+          mkdir -p "$CERTS_DIR"
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.crt" \
+            -subj "/CN=${TARGET_FQDN}" -addext "subjectAltName=DNS:${TARGET_FQDN}"
 
           # Create Ansible inventory directory if it doesn't exist
           sudo mkdir -p /etc/ansible
+
+          # Set python interpreter line only for SP4/SP5
+          PYTHON_INTERPRETER_LINE=""
+          if [[ "$CURRENT_HOSTNAME" == *sp4* || "$CURRENT_HOSTNAME" == *sp5* ]]; then
+            PYTHON_INTERPRETER_LINE='ansible_python_interpreter: "/usr/bin/python3"'
+          fi
 
           # Generate the inventory file
           sudo tee /etc/ansible/trento-inventory.yml > /dev/null << EOF
@@ -63,7 +74,7 @@ runs:
             children:
               trento_hosts:
                 vars:
-                  ansible_python_interpreter: $PYTHON_INTERPRETER
+                  ${PYTHON_INTERPRETER_LINE}
                   provision_prometheus: false
                   provision_proxy: true
                   web_postgres_password: "postgres"
@@ -74,6 +85,8 @@ runs:
                   wanda_port: 4001
                   trento_server_name: "{{ inventory_hostname }}"
                   nginx_vhost_filename: "{{ inventory_hostname }}"
+                  nginx_ssl_cert: "{{ lookup('file', '$CERTS_DIR/trento.crt') }}"
+                  nginx_ssl_key: "{{ lookup('file', '$CERTS_DIR/trento.key') }}"
                 hosts:
                   ${TARGET_FQDN}:
                     ansible_user: $SSH_USERNAME
