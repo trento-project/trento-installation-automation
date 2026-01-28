@@ -82,5 +82,5 @@ runs:
           echo "DEBUG: Contents of TEMP_DIR:"
           ls -la "$TEMP_DIR"
 
-          sudo zypper --non-interactive --gpg-auto-import-keys install --allow-unsigned-rpm --auto-agree-with-licenses "$TEMP_DIR"/ansible-trento-*.rpm
+          sudo zypper --non-interactive --no-gpg-checks install --allow-unsigned-rpm --auto-agree-with-licenses "$TEMP_DIR"/ansible-trento-*.rpm
           rm -rf "$TEMP_DIR"
