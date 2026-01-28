@@ -32,11 +32,6 @@ runs:
 
           source /etc/os-release
 
-          # Skip SLES 16 machines
-          if [[ "$VERSION_ID" == 16* ]]; then
-            exit 0
-          fi
-
           sudo SUSEConnect -r '${{ inputs.registration_code }}' -e '${{ inputs.registration_email }}'
           sudo SUSEConnect -p sle-module-basesystem/$VERSION_ID/x86_64
           sudo SUSEConnect -p PackageHub/$VERSION_ID/x86_64
