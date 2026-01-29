@@ -39,7 +39,7 @@ runs:
         for host in "${HOSTS[@]}"; do
           echo "Waiting for SSH on $host..."
           for i in $(seq 1 $MAX_ATTEMPTS); do
-            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes \
+            if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -o BatchMode=yes \
                  -i ~/.ssh/wait_key "${{ inputs.ssh_username }}@$host" "echo SSH ready" 2>/dev/null; then
               echo "SSH is ready on $host"
               break
