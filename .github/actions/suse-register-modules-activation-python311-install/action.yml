@@ -27,6 +27,7 @@ runs:
         host: ${{ inputs.hosts_fqdn_csv }}
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
+        timeout: 60s
         script: |
           set -e
 
