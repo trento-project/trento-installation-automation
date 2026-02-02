@@ -6,7 +6,7 @@ on:
       destroy_after:
         description: 'Destroy infrastructure after tests'
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: trento-installation-tests
