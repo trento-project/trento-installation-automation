@@ -18,3 +18,9 @@ variable "azure_owner_tag" {
   type        = string
   description = "azure resources owner tag"
 }
+
+variable "ssh_private_key_content" {
+  type        = string
+  description = "SSH private key for provisioner connections"
+  sensitive   = true
+}

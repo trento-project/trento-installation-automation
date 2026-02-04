@@ -80,7 +80,22 @@ resource "azurerm_linux_virtual_machine" "vm" {
 
   secure_boot_enabled = true
   vtpm_enabled        = true
+}
 
+resource "null_resource" "wait_for_ssh" {
+  for_each = azurerm_linux_virtual_machine.vm
 
+  connection {
+    type        = "ssh"
+    host        = azurerm_public_ip.pip[each.key].fqdn
+    user        = var.ssh_user
+    private_key = var.ssh_private_key_content
+    timeout     = "5m"
+  }
 
+  provisioner "remote-exec" {
+    inline = ["echo 'SSH is ready on ${each.value.name}'"]
+  }
+
+  depends_on = [azurerm_linux_virtual_machine.vm]
 }

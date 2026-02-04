@@ -20,6 +20,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Write machines config from env var
+        run: echo "${{ vars.MACHINES_CONFIG_CSV }}" > .machines.conf.csv
+
       - name: Azure Login
         uses: azure/login@v2
         with:

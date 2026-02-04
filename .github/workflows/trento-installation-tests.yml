@@ -6,7 +6,7 @@ on:
       destroy_after:
         description: 'Destroy infrastructure after tests'
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: trento-installation-tests
@@ -106,10 +106,13 @@ jobs:
           TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
           TF_VAR_azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
           TF_VAR_ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
+          TF_VAR_ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
       - name: Terraform Apply
         working-directory: ./terraform
         run: terraform apply -auto-approve tfplan
+        env:
+          TF_VAR_ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
       - name: Get machine hosts from CSV
         id: get-hosts
@@ -141,13 +144,20 @@ jobs:
 
       - name: Generate Ansible inventory on control nodes
         id: generate-inventory
-        uses: ./.github/actions/generate-ansible-inventory
+        uses: ./.github/actions/ansible-playbook-preparations
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
           ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
-          
+
+      - name: Run Ansible Trento playbook
+        uses: ./.github/actions/run-ansible-trento-playbook
+        with:
+          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+
       - name: Terraform Destroy
         if: inputs.destroy_after
         uses: ./.github/actions/terraform-destroy
