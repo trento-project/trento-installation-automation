@@ -106,10 +106,13 @@ jobs:
           TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
           TF_VAR_azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
           TF_VAR_ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
+          TF_VAR_ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
       - name: Terraform Apply
         working-directory: ./terraform
         run: terraform apply -auto-approve tfplan
+        env:
+          TF_VAR_ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
       - name: Get machine hosts from CSV
         id: get-hosts
@@ -117,13 +120,6 @@ jobs:
         with:
           csv_file: .machines.conf.csv
           azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
-
-      - name: Wait for SSH to be ready
-        uses: ./.github/actions/wait-for-ssh
-        with:
-          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
-          ssh_username: ${{ env.SSH_USERNAME }}
-          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
       - name: Register SUSE machines & activate modules & install Python
         id: activate-modules
