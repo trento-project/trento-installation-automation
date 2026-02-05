@@ -1,0 +1,121 @@
+# Trento Installation Automation
+
+Automated testing infrastructure for Trento release candidate artifacts. This project provisions Azure VMs and installs Trento using the official Ansible collection to validate RPM packages before release.
+
+## Overview
+
+The workflow:
+
+1. Provisions Azure VMs (control and target nodes) using Terraform
+2. Registers SUSE machines and activates required modules
+3. Downloads release candidate RPMs from Azure Blob Storage
+4. Sets up local RPM repositories on target machines
+5. Runs the `suse.trento.site` Ansible playbook to install Trento
+6. Optionally destroys the infrastructure after tests
+
+## Architecture
+
+The infrastructure consists of paired VMs for each supported SLES version:
+
+- **Control nodes** (`control*`): Run Ansible playbooks to install Trento on their paired target node
+- **Target nodes** (`target*`): Where Trento server gets installed
+
+VM naming convention: `{control|target}{slesVersion}sp{spVersion}{suffix}`
+
+Example: `control15sp6rpm` and `target15sp6rpm` for SLES 15 SP6.
+
+## Prerequisites
+
+### Azure Blob Storage Structure
+
+RPMs must be uploaded to Azure Blob Storage with the following structure:
+
+```
+<container>/
+├── 15/
+│   ├── 4/
+│   │   ├── trento-web-*.rpm
+│   │   ├── trento-wanda-*.rpm
+│   │   ├── trento-agent-*.rpm
+│   │   └── ansible-trento-*.rpm
+│   ├── 5/
+│   │   └── ...
+│   └── 6/
+│       └── ...
+└── 16/
+    └── 0/
+        └── ...
+```
+
+The directory structure follows the pattern: `<sles_major_version>/<sp_version>/`
+
+Each version directory should contain:
+- `trento-web-*.rpm` - Trento web server
+- `trento-wanda-*.rpm` - Trento checks engine
+- `trento-agent-*.rpm` - Trento agent
+- `ansible-trento-*.rpm` - Ansible collection for Trento installation
+
+### GitHub Configuration
+
+#### Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `AZURE_CREDENTIALS` | Azure service principal credentials (JSON) |
+| `PRIVATE_SSH_KEY_CONTENT` | SSH private key for VM access |
+| `AZURE_BLOB_STORAGE_SAS_TOKEN` | SAS token for blob storage access |
+| `SUSE_REGISTRATION_CODE` | SUSE subscription registration code |
+| `SUSE_REGISTRATION_EMAIL` | SUSE subscription email |
+| `WEB_ADMIN_PASSWORD` | Trento web admin password |
+
+#### Variables
+
+| Variable | Description |
+|----------|-------------|
+| `AZURE_RESOURCE_GROUP` | Azure resource group name |
+| `AZURE_OWNER_TAG` | Owner tag for Azure resources |
+| `AZURE_BLOB_STORAGE` | Storage account name |
+| `AZURE_BLOB_STORAGE_CONTAINER` | Container with RPMs |
+| `AZURE_BLOB_STORAGE_TF_STATE_CONTAINER` | Container for Terraform state |
+| `PUBLIC_SSH_KEY_CONTENT` | SSH public key for VM access |
+| `MACHINES_CONFIG_CSV` | Machine configuration (see below) |
+
+### Machine Configuration
+
+The `MACHINES_CONFIG_CSV` variable defines which VMs to provision:
+
+```csv
+prefix,slesVersion,spVersion,suffix
+control,15,6,rpm
+target,15,6,rpm
+control,16,0,rpm
+target,16,0,rpm
+```
+
+## Usage
+
+### Running Tests
+
+1. Go to **Actions** > **Trento Installation Tests**
+2. Click **Run workflow**
+3. Optionally check "Destroy infrastructure after tests"
+4. Click **Run workflow**
+
+### Cleanup
+
+To destroy all provisioned infrastructure:
+
+1. Go to **Actions** > **Terraform Destroy**
+2. Click **Run workflow**
+
+## Supported SLES Versions
+
+- SLES 15 SP4
+- SLES 15 SP5
+- SLES 15 SP6
+- SLES 15 SP7
+- SLES 16
+
+## License
+
+See [LICENSE](LICENSE) file.

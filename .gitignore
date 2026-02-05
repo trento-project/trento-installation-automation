@@ -1,14 +1,4 @@
-# Python virtual environments
-/.venv*
-
-# Generated artifacts
-/certs
-/inventories
-/logs
-/.ssh-keys
-
-# Environment and configuration
-.env
+# Machine configuration
 *.machines.conf.csv
 
 # Terraform state files
