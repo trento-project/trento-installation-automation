@@ -57,28 +57,58 @@ Each version directory should contain:
 
 ### GitHub Configuration
 
-#### Secrets
+==== Secrets
 
-| Secret | Description |
-|--------|-------------|
-| `AZURE_CREDENTIALS` | Azure service principal credentials (JSON) |
-| `PRIVATE_SSH_KEY_CONTENT` | SSH private key for VM access |
-| `AZURE_BLOB_STORAGE_SAS_TOKEN` | SAS token for blob storage access |
-| `SUSE_REGISTRATION_CODE` | SUSE subscription registration code |
-| `SUSE_REGISTRATION_EMAIL` | SUSE subscription email |
-| `WEB_ADMIN_PASSWORD` | Trento web admin password |
+[cols="1,2"]
+|===
+| Secret | Description
 
-#### Variables
+| `AZURE_CREDENTIALS`
+| Azure service principal credentials (JSON)
 
-| Variable | Description |
-|----------|-------------|
-| `AZURE_RESOURCE_GROUP` | Azure resource group name |
-| `AZURE_OWNER_TAG` | Owner tag for Azure resources |
-| `AZURE_BLOB_STORAGE` | Storage account name |
-| `AZURE_BLOB_STORAGE_CONTAINER` | Container with RPMs |
-| `AZURE_BLOB_STORAGE_TF_STATE_CONTAINER` | Container for Terraform state |
-| `PUBLIC_SSH_KEY_CONTENT` | SSH public key for VM access |
-| `MACHINES_CONFIG_CSV` | Machine configuration (see below) |
+| `PRIVATE_SSH_KEY_CONTENT`
+| SSH private key for VM access
+
+| `AZURE_BLOB_STORAGE_SAS_TOKEN`
+| SAS token for blob storage access
+
+| `SUSE_REGISTRATION_CODE`
+| SUSE subscription registration code
+
+| `SUSE_REGISTRATION_EMAIL`
+| SUSE subscription email
+
+| `WEB_ADMIN_PASSWORD`
+| Trento web admin password
+|===
+
+==== Variables
+
+[cols="1,2"]
+|===
+| Variable | Description
+
+| `AZURE_RESOURCE_GROUP`
+| Azure resource group name
+
+| `AZURE_OWNER_TAG`
+| Owner tag for Azure resources
+
+| `AZURE_BLOB_STORAGE`
+| Storage account name
+
+| `AZURE_BLOB_STORAGE_CONTAINER`
+| Container with RPMs
+
+| `AZURE_BLOB_STORAGE_TF_STATE_CONTAINER`
+| Container for Terraform state
+
+| `PUBLIC_SSH_KEY_CONTENT`
+| SSH public key for VM access
+
+| `MACHINES_CONFIG_CSV`
+| Machine configuration (see below)
+|===
 
 ### Machine Configuration
 
