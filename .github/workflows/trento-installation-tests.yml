@@ -121,9 +121,9 @@ jobs:
           csv_file: .machines.conf.csv
           azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
 
-      - name: Register SUSE machines & activate modules & install Python
+      - name: Register SUSE machines & activate modules
         id: activate-modules
-        uses: ./.github/actions/suse-register-modules-activation-python311-install
+        uses: ./.github/actions/suse-register-modules-activation
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
           ssh_username: ${{ env.SSH_USERNAME }}

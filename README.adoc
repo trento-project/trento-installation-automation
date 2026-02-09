@@ -51,12 +51,13 @@ RPMs must be uploaded to Azure Blob Storage with the following structure:
 The directory structure follows the pattern: `<sles_major_version>/<sp_version>/`
 
 Each version directory should contain:
-- `trento-web-*.rpm` - Trento web server
-- `trento-wanda-*.rpm` - Trento checks engine
-- `trento-agent-*.rpm` - Trento agent
-- `ansible-trento-*.rpm` - Ansible collection for Trento installation
 
-### GitHub Configuration
+* `trento-web-*.rpm` - Trento web server
+* `trento-wanda-*.rpm` - Trento checks engine
+* `trento-agent-*.rpm` - Trento agent
+* `ansible-trento-*.rpm` - Ansible collection for Trento installation
+
+=== GitHub Configuration
 
 ==== Secrets
 

@@ -1,5 +1,5 @@
-name: 'Register SUSE Machines, Activate Modules & Install Python'
-description: 'Register machines with SUSEConnect, activate SUSE modules (basesystem, PackageHub, legacy), and install Python via SSH'
+name: 'Register SUSE Machines, Activate Modules'
+description: 'Register machines with SUSEConnect & activate SUSE modules (basesystem, PackageHub, legacy)'
 
 inputs:
   hosts_fqdn_csv:
@@ -21,7 +21,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Activate SUSE modules & Install Python
+    - name: Register machines & activate SUSE modules
       uses: appleboy/ssh-action@v1.2.4
       with:
         host: ${{ inputs.hosts_fqdn_csv }}
