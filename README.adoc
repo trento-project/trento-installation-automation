@@ -148,4 +148,4 @@ To destroy all provisioned infrastructure:
 
 ## License
 
-See [LICENSE](LICENSE) file.
+See link:LICENSE[LICENSE] file.
