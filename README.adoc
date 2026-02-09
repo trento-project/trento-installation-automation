@@ -37,6 +37,7 @@ RPMs must be uploaded to Azure Blob Storage with the following structure:
 │   ├── 4/
 │   │   ├── trento-web-*.rpm
 │   │   ├── trento-wanda-*.rpm
+│   │   ├── trento-checks-*.rpm
 │   │   ├── trento-agent-*.rpm
 │   │   └── ansible-trento-*.rpm
 │   ├── 5/
@@ -54,6 +55,7 @@ Each version directory should contain:
 
 * `trento-web-*.rpm` - Trento web server
 * `trento-wanda-*.rpm` - Trento checks engine
+* `trento-checks-*.rpm` - Trento checks catalog
 * `trento-agent-*.rpm` - Trento agent
 * `ansible-trento-*.rpm` - Ansible collection for Trento installation
 
