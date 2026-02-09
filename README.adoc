@@ -11,7 +11,7 @@ The workflow:
 3. Downloads release candidate RPMs from Azure Blob Storage
 4. Sets up local RPM repositories on target machines
 5. Installs the Trento Ansible collection on control machines
-6. Runs the `suse.trento.site` Ansible playbook to install Trento
+6. Runs the `suse.trento.site` Ansible playbook to install Trento & Trento agent (Agents are installed on same machine as Trento server).
 7. Optionally destroys the infrastructure after tests
 
 ## Infrastructure
