@@ -15,6 +15,9 @@ inputs:
   ssh_public_key_content:
     description: 'SSH public key content'
     required: true
+  ssh_private_key_content:
+    description: 'SSH private key content'
+    required: true
   client_id:
     description: 'Azure client ID'
     required: true
@@ -73,4 +76,5 @@ runs:
         TF_VAR_azure_resource_group: ${{ inputs.azure_resource_group }}
         TF_VAR_azure_owner_tag: ${{ inputs.azure_owner_tag }}
         TF_VAR_ssh_public_key_content: ${{ inputs.ssh_public_key_content }}
+        TF_VAR_ssh_private_key_content: ${{ inputs.ssh_private_key_content }}
       run: terraform destroy -auto-approve -input=false
