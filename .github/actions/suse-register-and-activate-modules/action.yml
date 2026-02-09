@@ -1,4 +1,4 @@
-name: 'Register SUSE Machines, Activate Modules'
+name: 'Register SUSE Machines & Activate Modules'
 description: 'Register machines with SUSEConnect & activate SUSE modules (basesystem, PackageHub, legacy)'
 
 inputs:

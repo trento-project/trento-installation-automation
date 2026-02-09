@@ -123,7 +123,7 @@ jobs:
 
       - name: Register SUSE machines & activate modules
         id: activate-modules
-        uses: ./.github/actions/suse-register-modules-activation
+        uses: ./.github/actions/suse-register-and-activate-modules
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
           ssh_username: ${{ env.SSH_USERNAME }}
@@ -142,8 +142,8 @@ jobs:
           azure_blob_storage_container: ${{ env.AZURE_BLOB_STORAGE_CONTAINER }}
           azure_blob_storage_sas_token: ${{ secrets.AZURE_BLOB_STORAGE_SAS_TOKEN }}
 
-      - name: Generate Ansible inventory on control nodes
-        id: generate-inventory
+      - name: Ansible playbook preparations
+        id: ansible-playbook-preparations
         uses: ./.github/actions/ansible-playbook-preparations
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
