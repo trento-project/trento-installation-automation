@@ -20,7 +20,7 @@ runs:
         urls=""
         for host in "${HOSTS[@]}"; do
           if [[ "$host" == target* ]]; then
-            urls+="https://${host}/api/readyz|https://${host}/api/healthz|"
+            urls+="https://${host}/api/readyz|https://${host}/api/healthz|https://${host}/wanda/api/readyz|https://${host}/wanda/api/healthz|"
           fi
         done
 
