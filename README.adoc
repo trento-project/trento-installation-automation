@@ -12,6 +12,7 @@ The workflow:
 . Set up local RPM repositories on target machines
 . Install the Trento Ansible collection on control machines
 . Run the `suse.trento.site` Ansible playbook to install Trento & Trento agent (Agents are installed on same machine as Trento server).
+. Verify Healthcheck endpoints in every Trento instance from the runner.
 . Optionally destroy the infrastructure after tests
 
 == Infrastructure
