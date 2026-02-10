@@ -121,9 +121,9 @@ jobs:
           csv_file: .machines.conf.csv
           azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
 
-      - name: Register SUSE machines & activate modules & install Python
+      - name: Register SUSE machines & activate modules
         id: activate-modules
-        uses: ./.github/actions/suse-register-modules-activation-python311-install
+        uses: ./.github/actions/suse-register-and-activate-modules
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
           ssh_username: ${{ env.SSH_USERNAME }}
@@ -142,8 +142,8 @@ jobs:
           azure_blob_storage_container: ${{ env.AZURE_BLOB_STORAGE_CONTAINER }}
           azure_blob_storage_sas_token: ${{ secrets.AZURE_BLOB_STORAGE_SAS_TOKEN }}
 
-      - name: Generate Ansible inventory on control nodes
-        id: generate-inventory
+      - name: Ansible playbook preparations
+        id: ansible-playbook-preparations
         uses: ./.github/actions/ansible-playbook-preparations
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
@@ -165,6 +165,7 @@ jobs:
           azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
           azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
           ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
+          ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           client_id: ${{ steps.azure-creds.outputs.client_id }}
           client_secret: ${{ steps.azure-creds.outputs.client_secret }}
           tenant_id: ${{ steps.azure-creds.outputs.tenant_id }}

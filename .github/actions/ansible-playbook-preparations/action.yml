@@ -1,5 +1,5 @@
-name: 'Generate Ansible Inventory'
-description: 'Generate Ansible inventory file on control nodes with their matching target node'
+name: 'Ansible Playbook Preparations'
+description: 'Prepare control nodes for Ansible playbook execution (SSH keys, SSL certs, inventory generation)'
 
 inputs:
   hosts_fqdn_csv:
