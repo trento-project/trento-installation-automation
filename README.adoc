@@ -1,37 +1,37 @@
-# Trento Installation Automation
+= Trento Installation Automation
 
 Automated testing infrastructure for Trento release candidate artifacts. This project provisions Azure VMs and installs Trento using the official Ansible collection to validate RPM packages before release on supported versions of SUSE SLES for SAP.
 
-## Overview
+== Overview
 
 The workflow:
 
-1. Provisions Azure VMs (control and target nodes) using Terraform
-2. Registers SUSE machines and activates required modules
-3. Downloads release candidate RPMs from Azure Blob Storage
-4. Sets up local RPM repositories on target machines
-5. Installs the Trento Ansible collection on control machines
-6. Runs the `suse.trento.site` Ansible playbook to install Trento & Trento agent (Agents are installed on same machine as Trento server).
-7. Optionally destroys the infrastructure after tests
+*. Provision Azure VMs (control and target nodes) using Terraform
+* Registers SUSE machines and activates required modules
+* Downloads release candidate RPMs from Azure Blob Storage
+* Sets up local RPM repositories on target machines
+* Installs the Trento Ansible collection on control machines
+* Runs the `suse.trento.site` Ansible playbook to install Trento & Trento agent (Agents are installed on same machine as Trento server).
+* Optionally destroys the infrastructure after tests
 
-## Infrastructure
+== Infrastructure
 
 The infrastructure consists of paired VMs for each supported SLES version:
 
-- **Control nodes** (`control*`): Run Ansible playbooks to install Trento on their paired target node
-- **Target nodes** (`target*`): Where Trento server gets installed
+* **Control nodes** (`control*`): Run Ansible playbooks to install Trento on their paired target node
+* **Target nodes** (`target*`): Where Trento server gets installed
 
 VM naming convention: `{control|target}{slesVersion}sp{spVersion}{suffix}`
 
 Example: `control15sp6rpm` and `target15sp6rpm` for SLES 15 SP6.
 
-## Prerequisites
+== Prerequisites
 
-### Azure Blob Storage Structure
+=== Azure Blob Storage Structure
 
 RPMs must be uploaded to Azure Blob Storage with the following structure:
 
-```
+----
 <container>/
 ├── 15/
 │   ├── 4/
@@ -47,7 +47,7 @@ RPMs must be uploaded to Azure Blob Storage with the following structure:
 └── 16/
     └── 0/
         └── ...
-```
+----
 
 The directory structure follows the pattern: `<sles_major_version>/<sp_version>/`
 
@@ -114,42 +114,43 @@ Each version directory should contain:
 | Machine configuration (see below)
 |===
 
-### Machine Configuration
+=== Machine Configuration
 
 The `MACHINES_CONFIG_CSV` variable defines which VMs to provision:
 
-```csv
+[source,csv]
+----
 prefix,slesVersion,spVersion,suffix
 control,15,6,rpm
 target,15,6,rpm
 control,16,0,rpm
 target,16,0,rpm
-```
+----
 
-## Usage
+== Usage
 
-### Running Tests
+=== Running Tests
 
-1. Go to **Actions** > **Trento Installation Tests**
-2. Click **Run workflow**
-3. Optionally check "Destroy infrastructure after tests"
-4. Click **Run workflow**
+. Go to **Actions** > **Trento Installation Tests**
+. Click **Run workflow**
+. Optionally check "Destroy infrastructure after tests"
+. Click **Run workflow**
 
-### Cleanup
+=== Cleanup
 
 To destroy all provisioned infrastructure:
 
-1. Go to **Actions** > **Terraform Destroy**
-2. Click **Run workflow**
+. Go to **Actions** > **Terraform Destroy**
+. Click **Run workflow**
 
-## Supported SLES Versions
+== Supported SLES Versions
 
-- SLES 15 SP4
-- SLES 15 SP5
-- SLES 15 SP6
-- SLES 15 SP7
-- SLES 16
+* SLES 15 SP4
+* SLES 15 SP5
+* SLES 15 SP6
+* SLES 15 SP7
+* SLES 16
 
-## License
+== License
 
 See link:LICENSE[LICENSE] file.
