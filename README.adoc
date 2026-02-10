@@ -6,7 +6,7 @@ Automated testing infrastructure for Trento release candidate artifacts. This pr
 
 The workflow:
 
-*. Provision Azure VMs (control and target nodes) using Terraform
+* Provision Azure VMs (control and target nodes) using Terraform
 * Registers SUSE machines and activates required modules
 * Downloads release candidate RPMs from Azure Blob Storage
 * Sets up local RPM repositories on target machines
