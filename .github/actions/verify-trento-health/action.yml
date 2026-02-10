@@ -1,0 +1,42 @@
+name: 'Verify Trento Health'
+description: 'Verify Trento readyz and healthz endpoints on target machines'
+
+inputs:
+  hosts_fqdn_csv:
+    description: 'Comma-separated list of machine FQDNs'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Build health check URL list
+      id: build-urls
+      shell: bash
+      run: |
+        set -e
+
+        IFS=',' read -ra HOSTS <<< "${{ inputs.hosts_fqdn_csv }}"
+
+        urls=""
+        for host in "${HOSTS[@]}"; do
+          if [[ "$host" == target* ]]; then
+            urls+="https://${host}/api/readyz|https://${host}/api/healthz|"
+          fi
+        done
+
+        # Remove trailing pipe
+        urls="${urls%|}"
+
+        if [ -z "$urls" ]; then
+          exit 1
+        fi
+
+        echo "urls=$urls" >> $GITHUB_OUTPUT
+
+    - name: Check Trento health endpoints
+      uses: padurean/https-certificate-expiry-health-check-action@v1.0.0
+      with:
+        url: ${{ steps.build-urls.outputs.urls }}
+        follow-redirect: "yes"
+        max-attempts: 10
+        retry-delay: 10s
