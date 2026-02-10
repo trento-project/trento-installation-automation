@@ -1,18 +1,18 @@
 = Trento Installation Automation
 
-Automated testing infrastructure for Trento release candidate artifacts. This project provisions Azure VMs and installs Trento using the official Ansible collection to validate RPM packages before release on supported versions of SUSE SLES for SAP.
+Automated testing infrastructure for Trento release candidate artifacts. This tool is used to provision Azure VMs and install Trento using the official Ansible collection to validate RPM packages before release on supported versions of SUSE SLES for SAP.
 
 == Overview
 
 The workflow:
 
-* Provision Azure VMs (control and target nodes) using Terraform
-* Registers SUSE machines and activates required modules
-* Downloads release candidate RPMs from Azure Blob Storage
-* Sets up local RPM repositories on target machines
-* Installs the Trento Ansible collection on control machines
-* Runs the `suse.trento.site` Ansible playbook to install Trento & Trento agent (Agents are installed on same machine as Trento server).
-* Optionally destroys the infrastructure after tests
+. Provision Azure VMs (control and target nodes) using Terraform
+. Register SUSE machines and activates required modules
+. Download release candidate RPMs from Azure Blob Storage
+. Set up local RPM repositories on target machines
+. Install the Trento Ansible collection on control machines
+. Run the `suse.trento.site` Ansible playbook to install Trento & Trento agent (Agents are installed on same machine as Trento server).
+. Optionally destroy the infrastructure after tests
 
 == Infrastructure
 
