@@ -158,6 +158,11 @@ jobs:
           ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
+      - name: Verify Trento instances healthcheck endpoints
+        uses: ./.github/actions/verify-trento-health
+        with:
+          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
+
       - name: Terraform Destroy
         if: inputs.destroy_after
         uses: ./.github/actions/terraform-destroy

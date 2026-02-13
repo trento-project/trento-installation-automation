@@ -1,0 +1,44 @@
+name: 'Verify Trento Health'
+description: 'Verify Trento readyz and healthz endpoints on target machines'
+
+inputs:
+  hosts_fqdn_csv:
+    description: 'Comma-separated list of machine FQDNs'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Build health check URL list & set --insecure flag
+      id: build-urls
+      shell: bash
+      run: |
+        set -e
+
+        IFS=',' read -ra HOSTS <<< "${{ inputs.hosts_fqdn_csv }}"
+
+        urls=""
+        for host in "${HOSTS[@]}"; do
+          if [[ "$host" == target* ]]; then
+            urls+="https://${host}/api/readyz|https://${host}/api/healthz|https://${host}/wanda/api/readyz|https://${host}/wanda/api/healthz|"
+          fi
+        done
+
+        # Remove trailing pipe
+        urls="${urls%|}"
+
+        if [ -z "$urls" ]; then
+          exit 1
+        fi
+
+        echo "urls=$urls" >> $GITHUB_OUTPUT
+        
+        # Allow curl to connect to HTTPS endpoints with self-signed certificates
+        echo "--insecure" >> ~/.curlrc
+
+    - name: Check Trento health endpoints
+      uses: jtalk/url-health-check-action@v4
+      with:
+        url: ${{ steps.build-urls.outputs.urls }}
+        max-attempts: 5
+        retry-delay: 5s
