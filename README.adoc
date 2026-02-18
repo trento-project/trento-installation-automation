@@ -22,7 +22,7 @@ The infrastructure consists of paired VMs for each supported SLES version:
 * **Control nodes** (`control*`): Run Ansible playbooks to install Trento on their paired target node
 * **Target nodes** (`target*`): Where Trento server gets installed
 
-VM naming convention: `+{control|target}{slesVersion}sp{spVersion}{suffix}+`
+VM naming convention: `<control|target><slesVersion>sp<spVersion><suffix>`
 
 Example: `control15sp6rpm` and `target15sp6rpm` for SLES 15 SP6.
 
