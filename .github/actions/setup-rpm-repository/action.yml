@@ -54,14 +54,17 @@ runs:
             sudo mkdir -p /var/cache/zypper/custom_repo
             sudo azcopy cp "$URL_BASE/$SLES_MAJOR_VERSION/$SP_VERSION/*?${{ inputs.azure_blob_storage_sas_token }}" /var/cache/zypper/custom_repo --recursive=true --exclude-pattern "ansible-trento-*.rpm"
 
-            # Create local repository
-            sudo zypper --non-interactive --gpg-auto-import-keys install --auto-agree-with-licenses createrepo_c
-            sudo createrepo_c /var/cache/zypper/custom_repo
+            # Only create local repository if artifacts were downloaded
+            RPM_COUNT=$(find /var/cache/zypper/custom_repo -name "*.rpm" | wc -l)
+            if [ "$RPM_COUNT" -gt 0 ]; then
+              sudo zypper --non-interactive --gpg-auto-import-keys install --auto-agree-with-licenses createrepo_c
+              sudo createrepo_c /var/cache/zypper/custom_repo
 
-            # Configure zypper to use the local repository
-            echo -e '[custom_rpms]\nname=Local Custom RPMs\nbaseurl=file:///var/cache/zypper/custom_repo/\nenabled=1\ngpgcheck=0\npriority=1' | sudo tee /etc/zypp/repos.d/custom_rpms.repo > /dev/null
-            sudo zypper clean --all
-            sudo zypper --non-interactive --gpg-auto-import-keys refresh
+              # Configure zypper to use the local repository
+              echo -e '[custom_rpms]\nname=Local Custom RPMs\nbaseurl=file:///var/cache/zypper/custom_repo/\nenabled=1\ngpgcheck=0\npriority=1' | sudo tee /etc/zypp/repos.d/custom_rpms.repo > /dev/null
+              sudo zypper clean --all
+              sudo zypper --non-interactive --gpg-auto-import-keys refresh
+            fi
             exit 0
           fi
 
