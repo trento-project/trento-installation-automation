@@ -60,6 +60,8 @@ Each version directory should contain:
 * `trento-agent-*.rpm` - Trento agent
 * `ansible-trento-*.rpm` - Ansible collection for Trento installation
 
+NOTE: If a package is not provided in blob storage, it will be installed from the official SUSE release sources instead. This is useful when you want to test only a specific package (e.g., Ansible) while installing the rest from official SUSE release sources, or vice versa.
+
 === GitHub Configuration
 
 ==== Secrets
