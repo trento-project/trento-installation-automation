@@ -165,6 +165,13 @@ jobs:
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
 
+      - name: Report installed package versions
+        uses: ./.github/actions/report-installed-versions
+        with:
+          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+
       - name: Terraform Destroy
         if: inputs.destroy_after
         uses: ./.github/actions/terraform-destroy

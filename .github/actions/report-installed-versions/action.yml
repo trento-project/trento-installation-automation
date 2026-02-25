@@ -1,0 +1,54 @@
+name: 'Report Installed Versions'
+description: 'Query installed Trento package versions on all machines and write to job summary'
+
+inputs:
+  hosts_fqdn_csv:
+    description: 'Comma-separated list of machine FQDNs'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+  ssh_private_key:
+    description: 'SSH private key content'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Query package versions and write job summary
+      shell: bash
+      run: |
+        SSH_KEY_FILE=$(mktemp)
+        echo "${{ inputs.ssh_private_key }}" > "$SSH_KEY_FILE"
+        chmod 600 "$SSH_KEY_FILE"
+        SSH_OPTS="-o StrictHostKeyChecking=no -o BatchMode=yes -i $SSH_KEY_FILE"
+
+        {
+          echo "## Installed Package Versions"
+          echo ""
+
+          IFS=',' read -ra HOSTS <<< "${{ inputs.hosts_fqdn_csv }}"
+          for host in "${HOSTS[@]}"; do
+            short="${host%%.*}"
+
+            if [[ "$short" == control* ]]; then
+              packages="ansible-trento"
+            else
+              packages="trento-web trento-wanda trento-checks trento-agent"
+            fi
+
+            echo "### ${host}"
+            echo "| Package | Version |"
+            echo "|---------|---------|"
+
+            for pkg in $packages; do
+              version=$(ssh $SSH_OPTS "${{ inputs.ssh_username }}@${host}" \
+                "rpm -q --queryformat '%{VERSION}-%{RELEASE}' ${pkg} 2>/dev/null || echo 'not installed'")
+              echo "| \`${pkg}\` | \`${version}\` |"
+            done
+
+            echo ""
+          done
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        rm -f "$SSH_KEY_FILE"
