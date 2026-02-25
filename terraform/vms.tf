@@ -77,9 +77,9 @@ resource "azurerm_linux_virtual_machine" "vm" {
   }
 
   custom_data = base64encode(<<-EOT
-    #cloud-config
-    locale: en_US.UTF-8
-  EOT
+#cloud-config
+locale: en_US.UTF-8
+EOT
   )
 
   secure_boot_enabled = true
