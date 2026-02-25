@@ -1,0 +1,25 @@
+name: 'Generate Machines Config'
+description: 'Generate .machines.conf.csv from a newline-separated list of SLES versions'
+
+inputs:
+  os_versions:
+    description: 'Newline-separated list of SLES versions (e.g. "15.6\n16.0")'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate machines config CSV
+      shell: bash
+      run: |
+        {
+          echo "prefix,slesVersion,spVersion"
+          while IFS= read -r version; do
+            version=$(echo "$version" | tr -d '\r' | xargs)
+            [ -z "$version" ] && continue
+            sles_major="${version%%.*}"
+            sp="${version##*.}"
+            echo "control,${sles_major},${sp}"
+            echo "target,${sles_major},${sp}"
+          done <<< "${{ inputs.os_versions }}"
+        } > .machines.conf.csv
