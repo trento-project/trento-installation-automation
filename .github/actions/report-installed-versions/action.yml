@@ -23,32 +23,49 @@ runs:
         chmod 600 "$SSH_KEY_FILE"
         SSH_OPTS="-o StrictHostKeyChecking=no -o BatchMode=yes -i $SSH_KEY_FILE"
 
+        ALL_PACKAGES="ansible-trento trento-web trento-wanda trento-checks trento-agent"
+
+        IFS=',' read -ra HOSTS <<< "${{ inputs.hosts_fqdn_csv }}"
+
+        # Collect versions: versions[pkg:host]=version
+        declare -A versions
+        for host in "${HOSTS[@]}"; do
+          for pkg in $ALL_PACKAGES; do
+            version=$(ssh $SSH_OPTS "${{ inputs.ssh_username }}@${host}" \
+              "rpm -q --queryformat '%{VERSION}-%{RELEASE}' ${pkg} 2>/dev/null || echo '-'")
+            versions["${pkg}:${host}"]="$version"
+          done
+        done
+
         {
           echo "## Installed Package Versions"
           echo ""
 
-          IFS=',' read -ra HOSTS <<< "${{ inputs.hosts_fqdn_csv }}"
+          # Header row
+          header="| Package |"
+          separator="|---------|"
           for host in "${HOSTS[@]}"; do
             short="${host%%.*}"
-
-            if [[ "$short" == control* ]]; then
-              packages="ansible-trento"
-            else
-              packages="trento-web trento-wanda trento-checks trento-agent"
-            fi
-
-            echo "### ${host}"
-            echo "| Package | Version |"
-            echo "|---------|---------|"
-
-            for pkg in $packages; do
-              version=$(ssh $SSH_OPTS "${{ inputs.ssh_username }}@${host}" \
-                "rpm -q --queryformat '%{VERSION}-%{RELEASE}' ${pkg} 2>/dev/null || echo 'not installed'")
-              echo "| \`${pkg}\` | \`${version}\` |"
-            done
-
-            echo ""
+            # short is like control15sp4 or target15sp4 → c/t-major.minor
+            [[ "$short" =~ ^(control|target)([0-9]+)sp([0-9]+) ]]
+            prefix=$([[ "${BASH_REMATCH[1]}" == control ]] && echo "c" || echo "t")
+            label="${prefix}-${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+            header+=" \`${label}\` |"
+            separator+="----|"
           done
+          echo "$header"
+          echo "$separator"
+
+          # One row per package
+          for pkg in $ALL_PACKAGES; do
+            row="| \`${pkg}\` |"
+            for host in "${HOSTS[@]}"; do
+              row+=" \`${versions[${pkg}:${host}]}\` |"
+            done
+            echo "$row"
+          done
+
+          echo ""
         } >> "$GITHUB_STEP_SUMMARY"
 
         rm -f "$SSH_KEY_FILE"
