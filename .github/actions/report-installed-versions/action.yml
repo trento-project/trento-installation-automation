@@ -11,6 +11,12 @@ inputs:
   ssh_private_key:
     description: 'SSH private key content'
     required: true
+  control_packages:
+    description: 'Comma-separated list of packages to check on control nodes'
+    required: true
+  target_packages:
+    description: 'Comma-separated list of packages to check on target nodes'
+    required: true
 
 runs:
   using: 'composite'
@@ -21,85 +27,13 @@ runs:
         SSH_KEY_FILE=$(mktemp)
         echo "${{ inputs.ssh_private_key }}" > "$SSH_KEY_FILE"
         chmod 600 "$SSH_KEY_FILE"
-        SSH_OPTS="-o StrictHostKeyChecking=no -o BatchMode=yes -i $SSH_KEY_FILE"
 
-        CONTROL_PACKAGES="ansible-trento"
-        TARGET_PACKAGES="trento-web trento-wanda trento-checks trento-agent"
-
-        IFS=',' read -ra HOSTS <<< "${{ inputs.hosts_fqdn_csv }}"
-
-        # Split hosts by type
-        CONTROL_HOSTS=()
-        TARGET_HOSTS=()
-        for host in "${HOSTS[@]}"; do
-          short="${host%%.*}"
-          if [[ "$short" == control* ]]; then
-            CONTROL_HOSTS+=("$host")
-          else
-            TARGET_HOSTS+=("$host")
-          fi
-        done
-
-        # Helper: shorten hostname → 15.4
-        short_label() {
-          local short="${1%%.*}"
-          [[ "$short" =~ ^(control|target)([0-9]+)sp([0-9]+) ]]
-          echo "${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
-        }
-
-        # Collect versions: versions[pkg:host]=version
-        declare -A versions
-        for host in "${CONTROL_HOSTS[@]}"; do
-          for pkg in $CONTROL_PACKAGES; do
-            version=$(ssh $SSH_OPTS "${{ inputs.ssh_username }}@${host}" \
-              "rpm -q ${pkg} &>/dev/null && rpm -q --queryformat '%{VERSION}-%{RELEASE}' ${pkg} || echo '-'")
-            versions["${pkg}:${host}"]="$version"
-          done
-        done
-        for host in "${TARGET_HOSTS[@]}"; do
-          for pkg in $TARGET_PACKAGES; do
-            version=$(ssh $SSH_OPTS "${{ inputs.ssh_username }}@${host}" \
-              "rpm -q ${pkg} &>/dev/null && rpm -q --queryformat '%{VERSION}-%{RELEASE}' ${pkg} || echo '-'")
-            versions["${pkg}:${host}"]="$version"
-          done
-        done
-
-        # Helper: render a markdown table given hosts array and packages string
-        render_table() {
-          local -n _hosts=$1
-          local packages="$2"
-
-          local header="| Package |"
-          local separator="|---------|"
-          for host in "${_hosts[@]}"; do
-            header+=" \`$(short_label "$host")\` |"
-            separator+="----|"
-          done
-          echo "$header"
-          echo "$separator"
-
-          for pkg in $packages; do
-            local row="| \`${pkg}\` |"
-            for host in "${_hosts[@]}"; do
-              row+=" \`${versions[${pkg}:${host}]}\` |"
-            done
-            echo "$row"
-          done
-        }
-
-        {
-          echo "## Installed Package Versions"
-          echo ""
-
-          echo "### Control Nodes"
-          echo ""
-          render_table CONTROL_HOSTS "$CONTROL_PACKAGES"
-          echo ""
-
-          echo "### Target Nodes"
-          echo ""
-          render_table TARGET_HOSTS "$TARGET_PACKAGES"
-          echo ""
-        } >> "$GITHUB_STEP_SUMMARY"
+        python3 "${{ github.action_path }}/report.py" \
+          "${{ inputs.hosts_fqdn_csv }}" \
+          "${{ inputs.ssh_username }}" \
+          "$SSH_KEY_FILE" \
+          "${{ inputs.control_packages }}" \
+          "${{ inputs.target_packages }}" \
+          >> "$GITHUB_STEP_SUMMARY"
 
         rm -f "$SSH_KEY_FILE"
