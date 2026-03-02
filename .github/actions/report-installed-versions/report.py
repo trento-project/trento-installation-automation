@@ -20,6 +20,11 @@ def query_versions(host, user, key_file, packages):
         capture_output=True, text=True
     )
     versions = {}
+    if result.returncode != 0:
+        for pkg in packages:
+            versions[pkg] = "ERROR/UNREACHABLE"
+        return versions
+
     for line in result.stdout.strip().splitlines():
         pkg, ver = line.split(":", 1)
         versions[pkg] = ver
