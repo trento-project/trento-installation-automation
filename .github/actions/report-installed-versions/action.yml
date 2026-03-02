@@ -40,12 +40,11 @@ runs:
           fi
         done
 
-        # Helper: shorten hostname → c-15.4 / t-15.4
+        # Helper: shorten hostname → 15.4
         short_label() {
           local short="${1%%.*}"
           [[ "$short" =~ ^(control|target)([0-9]+)sp([0-9]+) ]]
-          local prefix=$([[ "${BASH_REMATCH[1]}" == control ]] && echo "c" || echo "t")
-          echo "${prefix}-${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          echo "${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
         }
 
         # Collect versions: versions[pkg:host]=version
