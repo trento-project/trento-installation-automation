@@ -49,26 +49,39 @@ runs:
           sudo zypper --non-interactive --gpg-auto-import-keys refresh
           sudo zypper --non-interactive --gpg-auto-import-keys install -y azcopy
 
+          # For each RPM, if it is not provided in blob storage, the official SUSE release sources will be used instead.
+
+          # If the blob storage path does not exist or is empty, treat it as no RPMs available and fall back to official SUSE sources
+          BLOB_LIST=$(azcopy list "$URL_ORIGIN" 2>/dev/null || true)
+
           if [[ "$HOSTNAME" == target* ]]; then
-            # Target nodes: setup full local RPM repository
-            sudo mkdir -p /var/cache/zypper/custom_repo
-            sudo azcopy cp "$URL_BASE/$SLES_MAJOR_VERSION/$SP_VERSION/*?${{ inputs.azure_blob_storage_sas_token }}" /var/cache/zypper/custom_repo --recursive=true --exclude-pattern "ansible-trento-*.rpm"
+            # Check if there are non-ansible RPMs in blob storage before copying
+            BLOB_RPM_COUNT=$(echo "$BLOB_LIST" | grep "\.rpm" | grep -vc "ansible-trento" || echo 0)
 
-            # Create local repository
-            sudo zypper --non-interactive --gpg-auto-import-keys install --auto-agree-with-licenses createrepo_c
-            sudo createrepo_c /var/cache/zypper/custom_repo
+            if [ "$BLOB_RPM_COUNT" -gt 0 ]; then
+              # Target nodes: setup full local RPM repository
+              sudo mkdir -p /var/cache/zypper/custom_repo
+              sudo azcopy cp "$URL_BASE/$SLES_MAJOR_VERSION/$SP_VERSION/*?${{ inputs.azure_blob_storage_sas_token }}" /var/cache/zypper/custom_repo --recursive=true --exclude-pattern "ansible-trento-*.rpm"
 
-            # Configure zypper to use the local repository
-            echo -e '[custom_rpms]\nname=Local Custom RPMs\nbaseurl=file:///var/cache/zypper/custom_repo/\nenabled=1\ngpgcheck=0\npriority=1' | sudo tee /etc/zypp/repos.d/custom_rpms.repo > /dev/null
-            sudo zypper clean --all
-            sudo zypper --non-interactive --gpg-auto-import-keys refresh
+              sudo zypper --non-interactive --gpg-auto-import-keys install --auto-agree-with-licenses createrepo_c
+              sudo createrepo_c /var/cache/zypper/custom_repo
+
+              # Configure zypper to use the local repository
+              echo -e '[custom_rpms]\nname=Local Custom RPMs\nbaseurl=file:///var/cache/zypper/custom_repo/\nenabled=1\ngpgcheck=0\npriority=1' | sudo tee /etc/zypp/repos.d/custom_rpms.repo > /dev/null
+              sudo zypper clean --all
+              sudo zypper --non-interactive --gpg-auto-import-keys refresh
+            fi
             exit 0
           fi
 
-          # Control nodes: just download and install ansible-trento directly
-          TEMP_DIR=$(mktemp -d)
+          # Control nodes: download and install ansible-trento, or fall back to official sources
+          ANSIBLE_RPM_COUNT=$(echo "$BLOB_LIST" | grep -c "ansible-trento.*\.rpm" || echo 0)
 
-          azcopy cp "$URL_BASE/$SLES_MAJOR_VERSION/$SP_VERSION/*?${{ inputs.azure_blob_storage_sas_token }}" "$TEMP_DIR" --recursive=true --include-pattern "ansible-trento-*.rpm"
-
-          sudo zypper --non-interactive --no-gpg-checks install --allow-unsigned-rpm --auto-agree-with-licenses "$TEMP_DIR"/ansible-trento-*.rpm
-          rm -rf "$TEMP_DIR"
+          if [ "$ANSIBLE_RPM_COUNT" -gt 0 ]; then
+            TEMP_DIR=$(mktemp -d)
+            azcopy cp "$URL_BASE/$SLES_MAJOR_VERSION/$SP_VERSION/*?${{ inputs.azure_blob_storage_sas_token }}" "$TEMP_DIR" --recursive=true --include-pattern "ansible-trento-*.rpm"
+            sudo zypper --non-interactive --no-gpg-checks install --allow-unsigned-rpm --auto-agree-with-licenses "$TEMP_DIR"/ansible-trento-*.rpm
+            rm -rf "$TEMP_DIR"
+          else
+            sudo zypper --non-interactive --gpg-auto-import-keys install --auto-agree-with-licenses ansible-trento
+          fi

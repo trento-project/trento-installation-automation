@@ -7,13 +7,13 @@ locals {
 
   source_virtual_machines = {
     for vm in local.machines_list :
-    "${vm.prefix}${vm.slesVersion}sp${vm.spVersion}-${vm.suffix}" => vm
+    "${vm.prefix}${vm.slesVersion}sp${vm.spVersion}" => vm
   }
 
   virtual_machines = {
     for key, vm in local.source_virtual_machines :
     key => {
-      name = "${vm.prefix}${vm.slesVersion}sp${vm.spVersion}${vm.suffix}"
+      name = "${vm.prefix}${vm.slesVersion}sp${vm.spVersion}"
 
       image_offer = tonumber(vm.slesVersion) >= 16 ? "sles-sap-${vm.slesVersion}-${vm.spVersion}-byos-x86-64" : "sles-sap-${vm.slesVersion}-sp${vm.spVersion}-byos"
 

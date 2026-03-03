@@ -41,7 +41,7 @@ runs:
 
         # Generate hostname list from CSV (only control and target machines)
         hosts_array=()
-        while IFS=, read -r prefix slesVersion spVersion suffix; do
+        while IFS=, read -r prefix slesVersion spVersion; do
           # Skip header and empty lines
           if [ "$prefix" = "prefix" ] || [ -z "$prefix" ]; then
             continue
@@ -51,11 +51,10 @@ runs:
           prefix=$(echo "$prefix" | tr -d '\r' | xargs)
           slesVersion=$(echo "$slesVersion" | tr -d '\r' | xargs)
           spVersion=$(echo "$spVersion" | tr -d '\r' | xargs)
-          suffix=$(echo "$suffix" | tr -d '\r' | xargs)
 
           # Only include control and target machines
           if [[ "$prefix" == control* ]] || [[ "$prefix" == target* ]]; then
-            vm_name="${prefix}${slesVersion}sp${spVersion}${suffix}"
+            vm_name="${prefix}${slesVersion}sp${spVersion}"
             hosts_array+=("$vm_name")
           fi
         done < "$CSV_FILE"
