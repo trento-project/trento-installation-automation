@@ -51,9 +51,12 @@ runs:
 
           # For each RPM, if it is not provided in blob storage, the official SUSE release sources will be used instead.
 
+          # If the blob storage path does not exist or is empty, treat it as no RPMs available and fall back to official SUSE sources
+          BLOB_LIST=$(azcopy list "$URL_ORIGIN" 2>/dev/null || true)
+
           if [[ "$HOSTNAME" == target* ]]; then
             # Check if there are non-ansible RPMs in blob storage before copying
-            BLOB_RPM_COUNT=$(azcopy list "$URL_BASE/$SLES_MAJOR_VERSION/$SP_VERSION/?${{ inputs.azure_blob_storage_sas_token }}" | grep "\.rpm" | grep -vc "ansible-trento" || true)
+            BLOB_RPM_COUNT=$(echo "$BLOB_LIST" | grep "\.rpm" | grep -vc "ansible-trento" || echo 0)
 
             if [ "$BLOB_RPM_COUNT" -gt 0 ]; then
               # Target nodes: setup full local RPM repository
@@ -72,7 +75,7 @@ runs:
           fi
 
           # Control nodes: download and install ansible-trento, or fall back to official sources
-          ANSIBLE_RPM_COUNT=$(azcopy list "$URL_BASE/$SLES_MAJOR_VERSION/$SP_VERSION/?${{ inputs.azure_blob_storage_sas_token }}" | grep -c "ansible-trento.*\.rpm" || true)
+          ANSIBLE_RPM_COUNT=$(echo "$BLOB_LIST" | grep -c "ansible-trento.*\.rpm" || echo 0)
 
           if [ "$ANSIBLE_RPM_COUNT" -gt 0 ]; then
             TEMP_DIR=$(mktemp -d)
