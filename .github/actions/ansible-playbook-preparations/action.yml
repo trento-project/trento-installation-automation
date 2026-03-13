@@ -52,12 +52,12 @@ runs:
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          # Generate SSL certificate for nginx
-          CERTS_DIR="$HOME/.ssl"
-          mkdir -p "$CERTS_DIR"
-          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.crt" \
-            -subj "/CN=${TARGET_FQDN}" -addext "subjectAltName=DNS:${TARGET_FQDN}"
+          # # Generate SSL certificate for nginx
+          # CERTS_DIR="$HOME/.ssl"
+          # mkdir -p "$CERTS_DIR"
+          # openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+          #   -keyout "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.crt" \
+          #   -subj "/CN=${TARGET_FQDN}" -addext "subjectAltName=DNS:${TARGET_FQDN}"
 
           # Create Ansible inventory directory if it doesn't exist
           sudo mkdir -p /etc/ansible
@@ -86,8 +86,8 @@ runs:
                   trento_server_name: "{{ inventory_hostname }}"
                   trento_server_url: "https://{{ inventory_hostname }}"
                   nginx_vhost_filename: "{{ inventory_hostname }}"
-                  nginx_ssl_cert: "{{ lookup('file', '$CERTS_DIR/trento.crt') }}"
-                  nginx_ssl_key: "{{ lookup('file', '$CERTS_DIR/trento.key') }}"
+                  # nginx_ssl_cert: "{{ lookup('file', '$CERTS_DIR/trento.crt') }}"
+                  # nginx_ssl_key: "{{ lookup('file', '$CERTS_DIR/trento.key') }}"
                 hosts:
                   ${TARGET_FQDN}:
                     ansible_user: $SSH_USERNAME
