@@ -47,17 +47,24 @@ runs:
           # Derive target FQDN by replacing 'control' with 'target'
           TARGET_FQDN="${CURRENT_FQDN/control/target}"
 
-          # Setup SSH private key for Ansible to connect to target nodes
+          # Setup SSH private key for Ansible and for communicating with target nodes
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          # Add target to known_hosts to avoid interactive prompt
+          ssh-keyscan -H "$TARGET_FQDN" >> ~/.ssh/known_hosts 2>/dev/null
 
-          # # Generate SSL certificate for nginx
-          # CERTS_DIR="$HOME/.ssl"
-          # mkdir -p "$CERTS_DIR"
-          # openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-          #   -keyout "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.crt" \
-          #   -subj "/CN=${TARGET_FQDN}" -addext "subjectAltName=DNS:${TARGET_FQDN}"
+          # Generate SSL certificate using Let's Encrypt
+          CERTS_DIR="$HOME/.ssl"
+          mkdir -p "$CERTS_DIR"
+
+          echo "Generating Let's Encrypt certificate for $TARGET_FQDN..."
+          # Install certbot on target and generate cert
+          ssh "$TARGET_FQDN" "sudo zypper --non-interactive install certbot && sudo certbot certonly --standalone -d $TARGET_FQDN --non-interactive --agree-tos --register-unsafely-without-email"
+
+          # Copy cert and key content back to control node
+          ssh "$TARGET_FQDN" "sudo cat /etc/letsencrypt/live/$TARGET_FQDN/fullchain.pem" > "$CERTS_DIR/trento.crt"
+          ssh "$TARGET_FQDN" "sudo cat /etc/letsencrypt/live/$TARGET_FQDN/privkey.pem" > "$CERTS_DIR/trento.key"
 
           # Create Ansible inventory directory if it doesn't exist
           sudo mkdir -p /etc/ansible
@@ -86,8 +93,8 @@ runs:
                   trento_server_name: "{{ inventory_hostname }}"
                   trento_server_url: "https://{{ inventory_hostname }}"
                   nginx_vhost_filename: "{{ inventory_hostname }}"
-                  # nginx_ssl_cert: "{{ lookup('file', '$CERTS_DIR/trento.crt') }}"
-                  # nginx_ssl_key: "{{ lookup('file', '$CERTS_DIR/trento.key') }}"
+                  nginx_ssl_cert: "{{ lookup('file', '$CERTS_DIR/trento.crt') }}"
+                  nginx_ssl_key: "{{ lookup('file', '$CERTS_DIR/trento.key') }}"
                 hosts:
                   ${TARGET_FQDN}:
                     ansible_user: $SSH_USERNAME
