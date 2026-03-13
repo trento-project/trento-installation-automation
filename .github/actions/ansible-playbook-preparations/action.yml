@@ -54,17 +54,31 @@ runs:
           # Add target to known_hosts to avoid interactive prompt
           ssh-keyscan -H "$TARGET_FQDN" >> ~/.ssh/known_hosts 2>/dev/null
 
-          # Generate SSL certificate using Let's Encrypt
+          # Generate SSL certificates using a local CA
           CERTS_DIR="$HOME/.ssl"
           mkdir -p "$CERTS_DIR"
 
-          echo "Generating Let's Encrypt certificate for $TARGET_FQDN..."
-          # Install certbot on target and generate cert
-          ssh "$TARGET_FQDN" "sudo zypper --non-interactive install certbot && sudo certbot certonly --standalone -d $TARGET_FQDN --non-interactive --agree-tos --register-unsafely-without-email"
+          echo "Generating Local CA and signed certificate for $TARGET_FQDN..."
+          # 1. Generate CA key and certificate
+          openssl genrsa -out "$CERTS_DIR/ca.key" 2048
+          openssl req -x509 -new -nodes -key "$CERTS_DIR/ca.key" -sha256 -days 3650 -out "$CERTS_DIR/ca.crt" -subj "/CN=Trento Test CA"
 
-          # Copy cert and key content back to control node
-          ssh "$TARGET_FQDN" "sudo cat /etc/letsencrypt/live/$TARGET_FQDN/fullchain.pem" > "$CERTS_DIR/trento.crt"
-          ssh "$TARGET_FQDN" "sudo cat /etc/letsencrypt/live/$TARGET_FQDN/privkey.pem" > "$CERTS_DIR/trento.key"
+          # 2. Generate Server key and CSR
+          openssl genrsa -out "$CERTS_DIR/trento.key" 2048
+          openssl req -new -key "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.csr" -subj "/CN=$TARGET_FQDN"
+
+          # 3. Sign the Server certificate with the CA
+          openssl x509 -req -in "$CERTS_DIR/trento.csr" -CA "$CERTS_DIR/ca.crt" -CAkey "$CERTS_DIR/ca.key" -CAcreateserial \
+            -out "$CERTS_DIR/trento.crt" -days 365 -sha256 \
+            -extfile <(echo "subjectAltName=DNS:$TARGET_FQDN")
+
+          # 4. Trust the CA on the control node (so tools like photofinish can talk to the target)
+          sudo cp "$CERTS_DIR/ca.crt" /usr/share/pki/trust/anchors/trento-test-ca.crt
+          sudo update-ca-certificates
+
+          # 5. Install the CA on the target node via SSH
+          scp "$CERTS_DIR/ca.crt" "$TARGET_FQDN":/tmp/ca.crt
+          ssh "$TARGET_FQDN" "sudo cp /tmp/ca.crt /usr/share/pki/trust/anchors/trento-test-ca.crt && sudo update-ca-certificates && rm /tmp/ca.crt"
 
           # Create Ansible inventory directory if it doesn't exist
           sudo mkdir -p /etc/ansible
