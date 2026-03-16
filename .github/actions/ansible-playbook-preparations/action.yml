@@ -127,8 +127,14 @@ runs:
       id: download-ca
       shell: bash
       run: |
-          # Get the first control host from the CSV
-          CONTROL_HOST=$(grep "control" .machines.conf.csv | head -n 1 | cut -d',' -f1)
+          # Get the first control FQDN from the input list
+          CONTROL_FQDN=$(echo "${{ inputs.hosts_fqdn_csv }}" | tr ',' '\n' | grep "control" | head -n 1)
+          
+          if [ -z "$CONTROL_FQDN" ]; then
+            echo "Error: No control host found in hosts_fqdn_csv"
+            exit 1
+          fi
+
           mkdir -p ./certs
-          scp -o StrictHostKeyChecking=no cloudadmin@${CONTROL_HOST}.westeurope.cloudapp.azure.com:~/.ssl/ca.crt ./certs/ca.crt
+          scp -o StrictHostKeyChecking=no ${{ inputs.ssh_username }}@${CONTROL_FQDN}:~/.ssl/ca.crt ./certs/ca.crt
           echo "ca_cert_path=$(pwd)/certs/ca.crt" >> $GITHUB_OUTPUT
