@@ -201,6 +201,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Checkout Trento Web tests
+        uses: actions/checkout@v4
+        with:
+          repository: trento-project/web
+          path: trento-web
+          sparse-checkout: test
+          sparse-checkout-cone-mode: false
+
       - name: Download CA certificate artifact
         uses: actions/download-artifact@v4
         with:
