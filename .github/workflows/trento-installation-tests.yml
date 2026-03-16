@@ -217,7 +217,8 @@ jobs:
 
       - name: Trust CA certificate
         run: |
-          sudo cp certs/ca.crt /usr/share/pki/trust/anchors/trento-ca.crt
+          sudo mkdir -p /usr/local/share/ca-certificates/
+          sudo cp certs/ca.crt /usr/local/share/ca-certificates/trento-ca.crt
           sudo update-ca-certificates
 
       - name: Run Cypress tests
