@@ -15,10 +15,15 @@ inputs:
     description: 'Trento web admin password'
     required: true
 
+outputs:
+  ca_cert_path:
+    description: 'Path to the generated CA certificate'
+    value: ${{ steps.download-ca.outputs.ca_cert_path }}
+
 runs:
   using: 'composite'
   steps:
-    - name: Generate Ansible inventory on control nodes
+    - name: Generate SSL certificates and Ansible inventory
       uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0 # v1.2.4
       env:
         SSH_USERNAME: ${{ inputs.ssh_username }}
@@ -54,20 +59,23 @@ runs:
           # Add target to known_hosts to avoid interactive prompt
           ssh-keyscan -H "$TARGET_FQDN" >> ~/.ssh/known_hosts 2>/dev/null
 
-          # Generate SSL certificate for nginx
+          # Generate SSL certificates using a local CA
           CERTS_DIR="$HOME/.ssl"
           mkdir -p "$CERTS_DIR"
-          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.crt" \
-            -subj "/CN=${TARGET_FQDN}" -addext "subjectAltName=DNS:${TARGET_FQDN}"
 
-          # Trust the certificate on the control node (as if it were a CA)
-          sudo cp "$CERTS_DIR/trento.crt" /usr/share/pki/trust/anchors/trento-selfsigned.crt
-          sudo update-ca-certificates
+          echo "Generating Local CA and signed certificate for $TARGET_FQDN..."
+          # 1. Generate CA key and certificate
+          openssl genrsa -out "$CERTS_DIR/ca.key" 2048
+          openssl req -x509 -new -nodes -key "$CERTS_DIR/ca.key" -sha256 -days 3650 -out "$CERTS_DIR/ca.crt" -subj "/CN=Trento Test CA"
 
-          # Install and trust the certificate on the target node via SSH
-          scp "$CERTS_DIR/trento.crt" "$TARGET_FQDN":/tmp/trento.crt
-          ssh "$TARGET_FQDN" "sudo cp /tmp/trento.crt /usr/share/pki/trust/anchors/trento-selfsigned.crt && sudo update-ca-certificates && rm /tmp/trento.crt"
+          # 2. Generate Server key and CSR
+          openssl genrsa -out "$CERTS_DIR/trento.key" 2048
+          openssl req -new -key "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.csr" -subj "/CN=$TARGET_FQDN"
+
+          # 3. Sign the Server certificate with the CA
+          openssl x509 -req -in "$CERTS_DIR/trento.csr" -CA "$CERTS_DIR/ca.crt" -CAkey "$CERTS_DIR/ca.key" -CAcreateserial \
+            -out "$CERTS_DIR/trento.crt" -days 365 -sha256 \
+            -extfile <(echo "subjectAltName=DNS:$TARGET_FQDN")
 
           # Create Ansible inventory directory if it doesn't exist
           sudo mkdir -p /etc/ansible
@@ -114,3 +122,13 @@ runs:
                 children:
                   trento_hosts: {}
           EOF
+
+    - name: Download CA certificate to GitHub Runner
+      id: download-ca
+      shell: bash
+      run: |
+          # Get the first control host from the CSV
+          CONTROL_HOST=$(grep "control" .machines.conf.csv | head -n 1 | cut -d',' -f1)
+          mkdir -p ./certs
+          scp -o StrictHostKeyChecking=no cloudadmin@${CONTROL_HOST}.westeurope.cloudapp.azure.com:~/.ssl/ca.crt ./certs/ca.crt
+          echo "ca_cert_path=$(pwd)/certs/ca.crt" >> $GITHUB_OUTPUT
