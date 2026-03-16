@@ -28,6 +28,9 @@ jobs:
     env:
       SSH_USERNAME: cloudadmin
 
+    outputs:
+      target_hosts_json: ${{ steps.get-hosts.outputs.target_hosts_json }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -153,6 +156,13 @@ jobs:
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
 
+      - name: Upload CA certificate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trento-ca-cert
+          path: ${{ steps.ansible-playbook-preparations.outputs.ca_cert_path }}
+          retention-days: 1
+
       - name: Run Ansible Trento playbook
         uses: ./.github/actions/run-ansible-trento-playbook
         with:
@@ -166,7 +176,7 @@ jobs:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
 
       - name: Terraform Destroy
-        if: inputs.destroy_after
+        if: always() && inputs.destroy_after
         uses: ./.github/actions/terraform-destroy
         with:
           azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
@@ -177,4 +187,33 @@ jobs:
           client_secret: ${{ steps.azure-creds.outputs.client_secret }}
           tenant_id: ${{ steps.azure-creds.outputs.tenant_id }}
           subscription_id: ${{ steps.azure-creds.outputs.subscription_id }}
-  
+
+  cypress-tests:
+    name: Cypress Tests (${{ matrix.target_host }})
+    needs: trento-installation-tests
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target_host: ${{ fromJson(needs.trento-installation-tests.outputs.target_hosts_json) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download CA certificate artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: trento-ca-cert
+          path: certs
+
+      - name: Trust CA certificate
+        run: |
+          sudo cp certs/ca.crt /usr/share/pki/trust/anchors/trento-ca.crt
+          sudo update-ca-certificates
+
+      - name: Run Cypress tests
+        run: |
+          echo "Running Cypress tests against https://${{ matrix.target_host }}"
+          # Add your actual cypress run command here, e.g.:
+          # npx cypress run --config baseUrl=https://${{ matrix.target_host }}

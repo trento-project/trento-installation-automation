@@ -14,6 +14,9 @@ outputs:
   hosts_fqdn_csv:
     description: 'Comma-separated list of control and target machine FQDNs'
     value: ${{ steps.generate.outputs.hosts_fqdn_csv }}
+  target_hosts_json:
+    description: 'JSON array of target machine FQDNs for matrix strategy'
+    value: ${{ steps.generate.outputs.target_hosts_json }}
 
 runs:
   using: 'composite'
@@ -41,6 +44,7 @@ runs:
 
         # Generate hostname list from CSV (only control and target machines)
         hosts_array=()
+        target_fqdns=()
         while IFS=, read -r prefix slesVersion spVersion; do
           # Skip header and empty lines
           if [ "$prefix" = "prefix" ] || [ -z "$prefix" ]; then
@@ -55,7 +59,11 @@ runs:
           # Only include control and target machines
           if [[ "$prefix" == control* ]] || [[ "$prefix" == target* ]]; then
             vm_name="${prefix}${slesVersion}sp${spVersion}"
-            hosts_array+=("$vm_name")
+            fqdn="${vm_name}.${LOCATION}.cloudapp.azure.com"
+            hosts_array+=("$fqdn")
+            if [[ "$prefix" == target* ]]; then
+              target_fqdns+=("$fqdn")
+            fi
           fi
         done < "$CSV_FILE"
 
@@ -66,13 +74,14 @@ runs:
         fi
 
         # Generate comma-separated FQDN list with location
-        fqdn_array=()
-        for host in "${hosts_array[@]}"; do
-          fqdn_array+=("${host}.${LOCATION}.cloudapp.azure.com")
-        done
-        hosts_fqdn_csv=$(IFS=','; echo "${fqdn_array[*]}")
+        hosts_fqdn_csv=$(IFS=','; echo "${hosts_array[*]}")
+
+        # Generate JSON array for target hosts
+        target_hosts_json="[$(printf '"%s",' "${target_fqdns[@]}" | sed 's/,$//')]"
 
         # Set output
         echo "hosts_fqdn_csv=$hosts_fqdn_csv" >> $GITHUB_OUTPUT
+        echo "target_hosts_json=$target_hosts_json" >> $GITHUB_OUTPUT
 
         echo "Generated FQDN list for ${#hosts_array[@]} machines: $hosts_fqdn_csv"
+        echo "Generated target hosts JSON for matrix: $target_hosts_json"
