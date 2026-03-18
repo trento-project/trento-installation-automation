@@ -49,4 +49,4 @@ runs:
             export ANSIBLE_ROLES_PATH=/usr/share/ansible/roles
           fi
 
-          ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i "$INVENTORY_FILE" suse.trento.site
+          ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i "$INVENTORY_FILE" suse.trento.server
