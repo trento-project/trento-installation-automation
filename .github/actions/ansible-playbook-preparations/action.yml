@@ -118,9 +118,6 @@ runs:
               rabbitmq_hosts:
                 children:
                   trento_hosts: {}
-              agents:
-                children:
-                  trento_hosts: {}
           EOF
 
     - name: Download CA certificate to GitHub Runner
