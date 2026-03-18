@@ -35,12 +35,12 @@ runs:
           sudo SUSEConnect -r '${{ inputs.registration_code }}' -e '${{ inputs.registration_email }}'
 
           if [[ "$VERSION_ID" != 16* ]]; then
-            sudo SUSEConnect -p sle-module-basesystem/$VERSION_ID/x86_64
+            # sudo SUSEConnect -p sle-module-basesystem/$VERSION_ID/x86_64
           fi
           
           sudo SUSEConnect -p PackageHub/$VERSION_ID/x86_64
 
           if [[ "$VERSION_ID" == "15.6" ]]; then
-            sudo SUSEConnect -p sle-module-legacy/$VERSION_ID/x86_64
+            # sudo SUSEConnect -p sle-module-legacy/$VERSION_ID/x86_64
           fi
 
