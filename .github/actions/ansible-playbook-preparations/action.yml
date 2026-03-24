@@ -93,14 +93,17 @@ runs:
               trento_hosts:
                 vars:
                   ${PYTHON_INTERPRETER_LINE}
-                  provision_prometheus: false
+                  provision_prometheus: true
                   provision_proxy: true
+                  rproxy_provision_prometheus: true
+                  trento_prometheus_auth: "none"
+                  rproxy_prometheus_auth: "none"
                   web_postgres_password: "postgres"
                   wanda_postgres_password: "postgres"
                   rabbitmq_password: "admin"
                   web_admin_password: "$WEB_ADMIN_PASSWORD"
                   trento_web_listen_port: 4000
-                  trento_web_listen_port: 4001
+                  trento_wanda_listen_port: 4001
                   trento_server_name: "{{ inventory_hostname }}"
                   trento_server_url: "https://{{ inventory_hostname }}"
                   nginx_vhost_filename: "{{ inventory_hostname }}"
@@ -110,6 +113,9 @@ runs:
                   ${TARGET_FQDN}:
                     ansible_user: $SSH_USERNAME
               trento_server:
+                children:
+                  trento_hosts: {}
+              prometheus_hosts:
                 children:
                   trento_hosts: {}
               postgres_hosts:
