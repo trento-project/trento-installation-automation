@@ -41,7 +41,7 @@ runs:
           INSTALL_ANSIBLE_PACKAGE_CMD="sudo zypper --non-interactive --gpg-auto-import-keys install -y --auto-agree-with-licenses ansible-trento"
 
           if [ "${{ inputs.install_rolling }}" = "true" ]; then
-            sudo zypper --non-interactive addrepo https://download.opensuse.org/repositories/devel:sap:trento:factory/SLES15-Trento-SP3-SP7/devel:sap:trento:factory.repo
+            sudo zypper --non-interactive addrepo https://download.opensuse.org/repositories/devel:sap:trento:factory/SLES15-Trento-SP3-SP7/devel:sap:trento:factory.repo 2>/dev/null || true
             sudo zypper --non-interactive --gpg-auto-import-keys refresh
             
             if [[ "$HOSTNAME" != target* ]]; then
