@@ -7,8 +7,8 @@ on:
         description: 'Install rolling version of packages'
         type: boolean
         default: false
-      destroy_after:
-        description: 'Destroy infrastructure after tests'
+      redeploy:
+        description: 'Redeploy: destroy existing infrastructure before starting'
         type: boolean
         default: false
 
@@ -107,6 +107,16 @@ jobs:
           echo "ARM_SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID" >> $GITHUB_ENV
           echo "Subscription ID set successfully"
 
+      - name: Terraform Destroy (Redeploy)
+        if: inputs.redeploy
+        working-directory: ./terraform
+        run: terraform destroy -auto-approve -input=false
+        env:
+          TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          TF_VAR_azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
+          TF_VAR_ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
+          TF_VAR_ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+
       - name: Terraform Plan
         id: plan
         working-directory: ./terraform
@@ -179,19 +189,6 @@ jobs:
         uses: ./.github/actions/verify-trento-health
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
-
-      - name: Terraform Destroy
-        if: always() && inputs.destroy_after
-        uses: ./.github/actions/terraform-destroy
-        with:
-          azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
-          azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
-          ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
-          ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          client_id: ${{ steps.azure-creds.outputs.client_id }}
-          client_secret: ${{ steps.azure-creds.outputs.client_secret }}
-          tenant_id: ${{ steps.azure-creds.outputs.tenant_id }}
-          subscription_id: ${{ steps.azure-creds.outputs.subscription_id }}
 
   cypress-tests:
     name: Cypress Tests (${{ matrix.target_host }})
