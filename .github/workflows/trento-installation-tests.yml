@@ -202,14 +202,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: adapt-photofinish-for-remote-instance
 
       - name: Checkout Trento Web tests
         uses: actions/checkout@v4
         with:
           repository: trento-project/web
           path: trento-web
+          ref: adapt-photofinish-for-remote-instance
 
       - name: Download CA certificate artifact
         uses: actions/download-artifact@v4
