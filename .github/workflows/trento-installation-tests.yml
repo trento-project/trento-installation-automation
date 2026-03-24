@@ -232,6 +232,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install web assets dependencies
+        run: |
+          cd trento-web/assets
+          npm ci
+
       - name: Cypress run
         uses: cypress-io/github-action@v6
         env:
