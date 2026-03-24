@@ -142,7 +142,6 @@ jobs:
 
       - name: Setup RPM repository on machines
         id: setup-rpm-repo
-        if: ${{ !inputs.install_rolling }}
         uses: ./.github/actions/setup-rpm-repository
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
@@ -151,17 +150,7 @@ jobs:
           azure_blob_storage: ${{ env.AZURE_BLOB_STORAGE }}
           azure_blob_storage_container: ${{ env.AZURE_BLOB_STORAGE_CONTAINER }}
           azure_blob_storage_sas_token: ${{ secrets.AZURE_BLOB_STORAGE_SAS_TOKEN }}
-
-      - name: Setup rolling repository on machines
-        if: ${{ inputs.install_rolling }}
-        uses: appleboy/ssh-action@v1.2.4
-        with:
-          host: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
-          username: ${{ env.SSH_USERNAME }}
-          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          script: |
-            sudo zypper --non-interactive addrepo https://download.opensuse.org/repositories/devel:sap:trento:factory/SLES15-Trento-SP3-SP7/devel:sap:trento:factory.repo
-            sudo zypper --non-interactive --gpg-auto-import-keys refresh
+          install_rolling: ${{ inputs.install_rolling }}
 
       - name: Ansible playbook preparations
         id: ansible-playbook-preparations
