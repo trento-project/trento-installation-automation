@@ -202,14 +202,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: adapt-photofinish-for-remote-instance
 
       - name: Checkout Trento Web tests
         uses: actions/checkout@v4
         with:
           repository: trento-project/web
           path: trento-web
-          sparse-checkout: test
-          sparse-checkout-cone-mode: false
 
       - name: Download CA certificate artifact
         uses: actions/download-artifact@v4
@@ -223,8 +223,29 @@ jobs:
           sudo cp certs/ca.crt /usr/local/share/ca-certificates/trento-ca.crt
           sudo update-ca-certificates
 
-      - name: Run Cypress tests
-        run: |
-          echo "Running Cypress tests against https://${{ matrix.target_host }}"
-          # Add your actual cypress run command here, e.g.:
-          # npx cypress run --config baseUrl=https://${{ matrix.target_host }}
+      - name: Install photofinish
+        uses: jaxxstorm/action-install-gh-release@v2.1.0
+        with:
+          repo: trento-project/photofinish
+          tag: v1.4.2
+          cache: enable
+          chmod: 0755
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cypress run
+        uses: cypress-io/github-action@v6
+        env:
+          cypress_video: false
+          cypress_photofinish_binary: /usr/local/bin/photofinish
+        with:
+          working-directory: trento-web/test/e2e
+          wait-on-timeout: 30
+          config: baseUrl=https://${{ matrix.target_host }},retries=3
+
+      - name: Upload cypress test screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-screenshots-${{ matrix.target_host }}
+          path: trento-web/test/e2e/cypress/screenshots/
