@@ -241,7 +241,7 @@ jobs:
         uses: cypress-io/github-action@v6
         env:
           cypress_video: false
-          cypress_photofinish_binary: /usr/local/bin/photofinish
+          cypress_photofinish_binary: $(whereis photofinish | cut -d" " -f2)
         with:
           working-directory: trento-web/test/e2e
           wait-on-timeout: 30
