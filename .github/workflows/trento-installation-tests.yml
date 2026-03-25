@@ -242,6 +242,7 @@ jobs:
         env:
           cypress_video: false
           cypress_photofinish_binary: $(whereis photofinish | cut -d" " -f2)
+          cypress_auto_discover_api_key: true
         with:
           working-directory: trento-web/test/e2e
           wait-on-timeout: 30
