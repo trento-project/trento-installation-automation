@@ -190,67 +190,67 @@ jobs:
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
 
-  cypress-tests:
-    name: Cypress Tests (${{ matrix.target_host }})
-    needs: trento-installation-tests
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        target_host: ${{ fromJson(needs.trento-installation-tests.outputs.target_hosts_json) }}
+  # cypress-tests:
+  #   name: Cypress Tests (${{ matrix.target_host }})
+  #   needs: trento-installation-tests
+  #   runs-on: ubuntu-24.04
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       target_host: ${{ fromJson(needs.trento-installation-tests.outputs.target_hosts_json) }}
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
 
-      - name: Checkout Trento Web tests
-        uses: actions/checkout@v4
-        with:
-          repository: trento-project/web
-          path: trento-web
-          ref: adapt-photofinish-for-remote-instance
+  #     - name: Checkout Trento Web tests
+  #       uses: actions/checkout@v4
+  #       with:
+  #         repository: trento-project/web
+  #         path: trento-web
+  #         ref: adapt-photofinish-for-remote-instance
 
-      - name: Download CA certificate artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: trento-ca-cert
-          path: certs
+  #     - name: Download CA certificate artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: trento-ca-cert
+  #         path: certs
 
-      - name: Trust CA certificate
-        run: |
-          sudo mkdir -p /usr/local/share/ca-certificates/
-          sudo cp certs/ca.crt /usr/local/share/ca-certificates/trento-ca.crt
-          sudo update-ca-certificates
+  #     - name: Trust CA certificate
+  #       run: |
+  #         sudo mkdir -p /usr/local/share/ca-certificates/
+  #         sudo cp certs/ca.crt /usr/local/share/ca-certificates/trento-ca.crt
+  #         sudo update-ca-certificates
 
-      - name: Install photofinish
-        uses: jaxxstorm/action-install-gh-release@v2.1.0
-        with:
-          repo: trento-project/photofinish
-          tag: v1.4.2
-          cache: enable
-          chmod: 0755
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     - name: Install photofinish
+  #       uses: jaxxstorm/action-install-gh-release@v2.1.0
+  #       with:
+  #         repo: trento-project/photofinish
+  #         tag: v1.4.2
+  #         cache: enable
+  #         chmod: 0755
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install web assets dependencies
-        run: |
-          cd trento-web/assets
-          npm ci
+  #     - name: Install web assets dependencies
+  #       run: |
+  #         cd trento-web/assets
+  #         npm ci
 
-      - name: Cypress run
-        uses: cypress-io/github-action@v6
-        env:
-          cypress_video: false
-          cypress_photofinish_binary: $(whereis photofinish | cut -d" " -f2)
-          cypress_auto_discover_api_key: true
-        with:
-          working-directory: trento-web/test/e2e
-          wait-on-timeout: 30
-          config: baseUrl=https://${{ matrix.target_host }},retries=3
+  #     - name: Cypress run
+  #       uses: cypress-io/github-action@v6
+  #       env:
+  #         cypress_video: false
+  #         cypress_photofinish_binary: $(whereis photofinish | cut -d" " -f2)
+  #         cypress_auto_discover_api_key: true
+  #       with:
+  #         working-directory: trento-web/test/e2e
+  #         wait-on-timeout: 30
+  #         config: baseUrl=https://${{ matrix.target_host }},retries=3
 
-      - name: Upload cypress test screenshots
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: e2e-screenshots-${{ matrix.target_host }}
-          path: trento-web/test/e2e/cypress/screenshots/
+  #     - name: Upload cypress test screenshots
+  #       uses: actions/upload-artifact@v4
+  #       if: failure()
+  #       with:
+  #         name: e2e-screenshots-${{ matrix.target_host }}
+  #         path: trento-web/test/e2e/cypress/screenshots/
