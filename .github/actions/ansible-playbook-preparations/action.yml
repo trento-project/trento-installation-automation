@@ -15,10 +15,15 @@ inputs:
     description: 'Trento web admin password'
     required: true
 
+outputs:
+  ca_cert_path:
+    description: 'Path to the generated CA certificate'
+    value: ${{ steps.download-ca.outputs.ca_cert_path }}
+
 runs:
   using: 'composite'
   steps:
-    - name: Generate Ansible inventory on control nodes
+    - name: Generate SSL certificates and Ansible inventory
       uses: appleboy/ssh-action@v1.2.4
       env:
         SSH_USERNAME: ${{ inputs.ssh_username }}
@@ -47,17 +52,30 @@ runs:
           # Derive target FQDN by replacing 'control' with 'target'
           TARGET_FQDN="${CURRENT_FQDN/control/target}"
 
-          # Setup SSH private key for Ansible to connect to target nodes
+          # Setup SSH private key for Ansible and for communicating with target nodes
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          # Add target to known_hosts to avoid interactive prompt
+          ssh-keyscan -H "$TARGET_FQDN" >> ~/.ssh/known_hosts 2>/dev/null
 
-          # Generate SSL certificate for nginx
+          # Generate SSL certificates using a local CA
           CERTS_DIR="$HOME/.ssl"
           mkdir -p "$CERTS_DIR"
-          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.crt" \
-            -subj "/CN=${TARGET_FQDN}" -addext "subjectAltName=DNS:${TARGET_FQDN}"
+
+          echo "Generating Local CA and signed certificate for $TARGET_FQDN..."
+          # 1. Generate CA key and certificate
+          openssl genrsa -out "$CERTS_DIR/ca.key" 2048
+          openssl req -x509 -new -nodes -key "$CERTS_DIR/ca.key" -sha256 -days 3650 -out "$CERTS_DIR/ca.crt" -subj "/CN=Trento Test CA"
+
+          # 2. Generate Server key and CSR
+          openssl genrsa -out "$CERTS_DIR/trento.key" 2048
+          openssl req -new -key "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.csr" -subj "/CN=$TARGET_FQDN"
+
+          # 3. Sign the Server certificate with the CA
+          openssl x509 -req -in "$CERTS_DIR/trento.csr" -CA "$CERTS_DIR/ca.crt" -CAkey "$CERTS_DIR/ca.key" -CAcreateserial \
+            -out "$CERTS_DIR/trento.crt" -days 365 -sha256 \
+            -extfile <(echo "subjectAltName=DNS:$TARGET_FQDN")
 
           # Create Ansible inventory directory if it doesn't exist
           sudo mkdir -p /etc/ansible
@@ -75,14 +93,17 @@ runs:
               trento_hosts:
                 vars:
                   ${PYTHON_INTERPRETER_LINE}
-                  provision_prometheus: false
+                  provision_prometheus: true
                   provision_proxy: true
+                  rproxy_provision_prometheus: true
+                  trento_prometheus_auth: "none"
+                  rproxy_prometheus_auth: "none"
                   web_postgres_password: "postgres"
                   wanda_postgres_password: "postgres"
                   rabbitmq_password: "admin"
                   web_admin_password: "$WEB_ADMIN_PASSWORD"
                   trento_web_listen_port: 4000
-                  trento_web_listen_port: 4001
+                  trento_wanda_listen_port: 4001
                   trento_server_name: "{{ inventory_hostname }}"
                   trento_server_url: "https://{{ inventory_hostname }}"
                   nginx_vhost_filename: "{{ inventory_hostname }}"
@@ -94,13 +115,29 @@ runs:
               trento_server:
                 children:
                   trento_hosts: {}
+              prometheus_hosts:
+                children:
+                  trento_hosts: {}
               postgres_hosts:
                 children:
                   trento_hosts: {}
               rabbitmq_hosts:
                 children:
                   trento_hosts: {}
-              agents:
-                children:
-                  trento_hosts: {}
           EOF
+
+    - name: Download CA certificate to GitHub Runner
+      id: download-ca
+      shell: bash
+      run: |
+          # Get the first control FQDN from the input list
+          CONTROL_FQDN=$(echo "${{ inputs.hosts_fqdn_csv }}" | tr ',' '\n' | grep "control" | head -n 1)
+          
+          if [ -z "$CONTROL_FQDN" ]; then
+            echo "Error: No control host found in hosts_fqdn_csv"
+            exit 1
+          fi
+
+          mkdir -p ./certs
+          scp -o StrictHostKeyChecking=no ${{ inputs.ssh_username }}@${CONTROL_FQDN}:~/.ssl/ca.crt ./certs/ca.crt
+          echo "ca_cert_path=$(pwd)/certs/ca.crt" >> $GITHUB_OUTPUT

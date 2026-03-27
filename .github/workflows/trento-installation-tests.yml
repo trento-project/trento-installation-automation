@@ -3,10 +3,22 @@ name: Trento Installation Tests
 on:
   workflow_dispatch:
     inputs:
-      destroy_after:
-        description: 'Destroy infrastructure after tests'
+      install_rolling:
+        description: 'Install rolling version of packages'
         type: boolean
         default: false
+      redeploy:
+        description: 'Redeploy: destroy existing infrastructure before starting'
+        type: boolean
+        default: false
+      skip_cypress:
+        description: 'Skip Cypress tests'
+        type: boolean
+        default: false
+      cypress_spec:
+        description: 'Cypress spec to run'
+        type: string
+        default: 'cypress/e2e/**.cy.js'
 
 concurrency:
   group: trento-installation-tests
@@ -27,6 +39,9 @@ jobs:
 
     env:
       SSH_USERNAME: cloudadmin
+
+    outputs:
+      target_hosts_json: ${{ steps.get-hosts.outputs.target_hosts_json }}
 
     steps:
       - name: Checkout repository
@@ -100,6 +115,16 @@ jobs:
           echo "ARM_SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID" >> $GITHUB_ENV
           echo "Subscription ID set successfully"
 
+      - name: Terraform Destroy (Redeploy)
+        if: inputs.redeploy
+        working-directory: ./terraform
+        run: terraform destroy -auto-approve -input=false
+        env:
+          TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          TF_VAR_azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
+          TF_VAR_ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
+          TF_VAR_ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+
       - name: Terraform Plan
         id: plan
         working-directory: ./terraform
@@ -143,6 +168,7 @@ jobs:
           azure_blob_storage: ${{ env.AZURE_BLOB_STORAGE }}
           azure_blob_storage_container: ${{ env.AZURE_BLOB_STORAGE_CONTAINER }}
           azure_blob_storage_sas_token: ${{ secrets.AZURE_BLOB_STORAGE_SAS_TOKEN }}
+          install_rolling: ${{ inputs.install_rolling }}
 
       - name: Ansible playbook preparations
         id: ansible-playbook-preparations
@@ -152,6 +178,13 @@ jobs:
           ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
+
+      - name: Upload CA certificate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trento-ca-cert
+          path: ${{ steps.ansible-playbook-preparations.outputs.ca_cert_path }}
+          retention-days: 1
 
       - name: Run Ansible Trento playbook
         uses: ./.github/actions/run-ansible-trento-playbook
@@ -165,16 +198,69 @@ jobs:
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
 
-      - name: Terraform Destroy
-        if: inputs.destroy_after
-        uses: ./.github/actions/terraform-destroy
+  cypress-tests:
+    name: Cypress Tests (${{ matrix.target_host }})
+    if: ${{ !inputs.skip_cypress }}
+    needs: trento-installation-tests
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target_host: ${{ fromJson(needs.trento-installation-tests.outputs.target_hosts_json) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Trento Web tests
+        uses: actions/checkout@v4
         with:
-          azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
-          azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
-          ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
-          ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          client_id: ${{ steps.azure-creds.outputs.client_id }}
-          client_secret: ${{ steps.azure-creds.outputs.client_secret }}
-          tenant_id: ${{ steps.azure-creds.outputs.tenant_id }}
-          subscription_id: ${{ steps.azure-creds.outputs.subscription_id }}
-  
+          repository: trento-project/web
+          path: trento-web
+          ref: adapt-photofinish-for-remote-instance
+
+      - name: Download CA certificate artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: trento-ca-cert
+          path: certs
+
+      - name: Trust CA certificate
+        run: |
+          sudo mkdir -p /usr/local/share/ca-certificates/
+          sudo cp certs/ca.crt /usr/local/share/ca-certificates/trento-ca.crt
+          sudo update-ca-certificates
+          echo "NODE_EXTRA_CA_CERTS=${{ github.workspace }}/certs/ca.crt" >> $GITHUB_ENV
+
+      - name: Install photofinish
+        uses: jaxxstorm/action-install-gh-release@v2.1.0
+        with:
+          repo: trento-project/photofinish
+          tag: v1.4.2
+          cache: enable
+          chmod: 0755
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install web assets dependencies
+        run: |
+          cd trento-web/assets
+          npm ci
+
+      - name: Cypress run
+        uses: cypress-io/github-action@v6
+        env:
+          cypress_video: false
+          cypress_photofinish_binary: $(whereis photofinish | cut -d" " -f2)
+        with:
+          working-directory: trento-web/test/e2e
+          wait-on-timeout: 30
+          config: baseUrl=https://${{ matrix.target_host }},retries=3
+          spec: ${{ inputs.cypress_spec }}
+
+      - name: Upload cypress test screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-screenshots-${{ matrix.target_host }}
+          path: trento-web/test/e2e/cypress/screenshots/
