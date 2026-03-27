@@ -11,6 +11,10 @@ on:
         description: 'Redeploy: destroy existing infrastructure before starting'
         type: boolean
         default: false
+      skip_cypress:
+        description: 'Skip Cypress tests'
+        type: boolean
+        default: false
       cypress_spec:
         description: 'Cypress spec to run'
         type: string
@@ -196,6 +200,7 @@ jobs:
 
   cypress-tests:
     name: Cypress Tests (${{ matrix.target_host }})
+    if: ${{ !inputs.skip_cypress }}
     needs: trento-installation-tests
     runs-on: ubuntu-24.04
     strategy:
@@ -225,6 +230,7 @@ jobs:
           sudo mkdir -p /usr/local/share/ca-certificates/
           sudo cp certs/ca.crt /usr/local/share/ca-certificates/trento-ca.crt
           sudo update-ca-certificates
+          echo "NODE_EXTRA_CA_CERTS=${{ github.workspace }}/certs/ca.crt" >> $GITHUB_ENV
 
       - name: Install photofinish
         uses: jaxxstorm/action-install-gh-release@v2.1.0
@@ -251,3 +257,10 @@ jobs:
           wait-on-timeout: 30
           config: baseUrl=https://${{ matrix.target_host }},retries=3
           spec: ${{ inputs.cypress_spec }}
+
+      - name: Upload cypress test screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-screenshots-${{ matrix.target_host }}
+          path: trento-web/test/e2e/cypress/screenshots/
