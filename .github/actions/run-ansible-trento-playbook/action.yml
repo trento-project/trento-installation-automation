@@ -16,7 +16,7 @@ runs:
   using: 'composite'
   steps:
     - name: Run Ansible Trento playbook on control nodes
-      uses: appleboy/ssh-action@v1.2.4
+      uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0 # v1.2.4
       with:
         host: ${{ inputs.hosts_fqdn_csv }}
         username: ${{ inputs.ssh_username }}
