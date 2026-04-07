@@ -18,13 +18,36 @@ inputs:
 outputs:
   ca_cert_path:
     description: 'Path to the generated CA certificate'
-    value: ${{ steps.download-ca.outputs.ca_cert_path }}
+    value: ${{ steps.generate-ca.outputs.ca_cert_path }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Generate SSL certificates and Ansible inventory
-      uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0 # v1.2.4
+    - name: Generate Local CA on GitHub Runner
+      shell: bash
+      id: generate-ca
+      run: |
+        mkdir -p ./certs
+        CERTS_DIR="$(pwd)/certs"
+        echo "Generating Local CA on GitHub Runner..."
+        openssl genrsa -out "$CERTS_DIR/ca.key" 2048
+        openssl req -x509 -new -nodes -key "$CERTS_DIR/ca.key" -sha256 -days 3650 -out "$CERTS_DIR/ca.crt" -subj "/CN=Trento Test CA"
+        echo "ca_cert_path=$CERTS_DIR/ca.crt" >> $GITHUB_OUTPUT
+
+    - name: Distribute CA to control nodes
+      shell: bash
+      run: |
+        IFS=',' read -ra HOSTS <<< "${{ inputs.hosts_fqdn_csv }}"
+        for host in "${HOSTS[@]}"; do
+          if [[ "$host" == control* ]]; then
+            echo "Distributing CA to $host..."
+            ssh -o StrictHostKeyChecking=no ${{ inputs.ssh_username }}@$host "mkdir -p ~/.ssl"
+            scp -o StrictHostKeyChecking=no ./certs/ca.key ./certs/ca.crt ${{ inputs.ssh_username }}@$host:~/.ssl/
+          fi
+        done
+
+    - name: Generate signed certificates and Ansible inventory
+      uses: appleboy/ssh-action@v1.2.4
       env:
         SSH_USERNAME: ${{ inputs.ssh_username }}
         SSH_PRIVATE_KEY: ${{ inputs.ssh_private_key }}
@@ -59,15 +82,11 @@ runs:
           # Add target to known_hosts to avoid interactive prompt
           ssh-keyscan -H "$TARGET_FQDN" >> ~/.ssh/known_hosts 2>/dev/null
 
-          # Generate SSL certificates using a local CA
+          # Prepare SSL certificates directory
           CERTS_DIR="$HOME/.ssl"
-          mkdir -p "$CERTS_DIR"
+          chmod 600 "$CERTS_DIR/ca.key"
 
-          echo "Generating Local CA and signed certificate for $TARGET_FQDN..."
-          # 1. Generate CA key and certificate
-          openssl genrsa -out "$CERTS_DIR/ca.key" 2048
-          openssl req -x509 -new -nodes -key "$CERTS_DIR/ca.key" -sha256 -days 3650 -out "$CERTS_DIR/ca.crt" -subj "/CN=Trento Test CA"
-
+          echo "Generating signed certificate for $TARGET_FQDN..."
           # 2. Generate Server key and CSR
           openssl genrsa -out "$CERTS_DIR/trento.key" 2048
           openssl req -new -key "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.csr" -subj "/CN=$TARGET_FQDN"
@@ -96,6 +115,7 @@ runs:
                   provision_prometheus: true
                   provision_proxy: true
                   rproxy_provision_prometheus: true
+                  trento_prometheus_port: 9095
                   trento_prometheus_auth: "none"
                   rproxy_prometheus_auth: "none"
                   web_postgres_password: "postgres"
@@ -125,19 +145,3 @@ runs:
                 children:
                   trento_hosts: {}
           EOF
-
-    - name: Download CA certificate to GitHub Runner
-      id: download-ca
-      shell: bash
-      run: |
-          # Get the first control FQDN from the input list
-          CONTROL_FQDN=$(echo "${{ inputs.hosts_fqdn_csv }}" | tr ',' '\n' | grep "control" | head -n 1)
-          
-          if [ -z "$CONTROL_FQDN" ]; then
-            echo "Error: No control host found in hosts_fqdn_csv"
-            exit 1
-          fi
-
-          mkdir -p ./certs
-          scp -o StrictHostKeyChecking=no ${{ inputs.ssh_username }}@${CONTROL_FQDN}:~/.ssl/ca.crt ./certs/ca.crt
-          echo "ca_cert_path=$(pwd)/certs/ca.crt" >> $GITHUB_OUTPUT
