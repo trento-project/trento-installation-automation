@@ -40,8 +40,19 @@ runs:
           HOSTNAME=$(hostname)
           INSTALL_ANSIBLE_PACKAGE_CMD="sudo zypper --non-interactive --gpg-auto-import-keys install -y --auto-agree-with-licenses ansible-trento"
 
+          # Extract SLES version from /etc/os-release (e.g., VERSION_ID="15.4")
+          source /etc/os-release
+          SLES_MAJOR_VERSION="${VERSION_ID%%.*}"
+          SP_VERSION="${VERSION_ID##*.}"
+
           if [ "${{ inputs.install_rolling }}" = "true" ]; then
-            sudo zypper --non-interactive addrepo https://download.opensuse.org/repositories/devel:sap:trento:factory/SLES15-Trento-SP3-SP7/devel:sap:trento:factory.repo 2>/dev/null || true
+            if [ "$SLES_MAJOR_VERSION" = "16" ]; then
+              REPO_URL="https://download.opensuse.org/repositories/devel:/sap:/trento:/factory/SLES16.0/devel:sap:trento:factory.repo"
+            else
+              REPO_URL="https://download.opensuse.org/repositories/devel:sap:trento:factory/SLES15-Trento-SP3-SP7/devel:sap:trento:factory.repo"
+            fi
+
+            sudo zypper --non-interactive addrepo $REPO_URL 2>/dev/null || true
             sudo zypper --non-interactive --gpg-auto-import-keys refresh
             
             if [[ "$HOSTNAME" != target* ]]; then
@@ -49,11 +60,6 @@ runs:
             fi
             exit 0
           fi
-
-          # Extract SLES version from /etc/os-release (e.g., VERSION_ID="15.4")
-          source /etc/os-release
-          SLES_MAJOR_VERSION="${VERSION_ID%%.*}"
-          SP_VERSION="${VERSION_ID##*.}"
 
           # Build version-specific blob storage URL
           URL_BASE="https://${{ inputs.azure_blob_storage }}.blob.core.windows.net/${{ inputs.azure_blob_storage_container }}"
