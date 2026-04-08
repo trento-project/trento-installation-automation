@@ -115,6 +115,7 @@ runs:
                   provision_prometheus: true
                   provision_proxy: true
                   rproxy_provision_prometheus: true
+                  trento_prometheus_port: 9095
                   trento_prometheus_auth: "none"
                   rproxy_prometheus_auth: "none"
                   web_postgres_password: "postgres"
