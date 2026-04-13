@@ -198,6 +198,20 @@ jobs:
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
 
+      - name: Stop Trento agent on target machines
+        uses: appleboy/ssh-action@v1.2.4
+        with:
+          host: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
+          username: ${{ env.SSH_USERNAME }}
+          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          script: |
+            set -e
+            CURRENT_HOSTNAME=$(hostname -s)
+            if [[ "$CURRENT_HOSTNAME" != *target* ]]; then
+              exit 0
+            fi
+            sudo systemctl stop trento-agent
+
   cypress-tests:
     name: Cypress Tests (${{ matrix.target_host }})
     if: ${{ !inputs.skip_cypress }}
