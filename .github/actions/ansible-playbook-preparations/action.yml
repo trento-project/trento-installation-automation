@@ -15,11 +15,39 @@ inputs:
     description: 'Trento web admin password'
     required: true
 
+outputs:
+  ca_cert_path:
+    description: 'Path to the generated CA certificate'
+    value: ${{ steps.generate-ca.outputs.ca_cert_path }}
+
 runs:
   using: 'composite'
   steps:
-    - name: Generate Ansible inventory on control nodes
-      uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0 # v1.2.4
+    - name: Generate Local CA on GitHub Runner
+      shell: bash
+      id: generate-ca
+      run: |
+        mkdir -p ./certs
+        CERTS_DIR="$(pwd)/certs"
+        echo "Generating Local CA on GitHub Runner..."
+        openssl genrsa -out "$CERTS_DIR/ca.key" 2048
+        openssl req -x509 -new -nodes -key "$CERTS_DIR/ca.key" -sha256 -days 3650 -out "$CERTS_DIR/ca.crt" -subj "/CN=Trento Test CA"
+        echo "ca_cert_path=$CERTS_DIR/ca.crt" >> $GITHUB_OUTPUT
+
+    - name: Distribute CA to control nodes
+      shell: bash
+      run: |
+        IFS=',' read -ra HOSTS <<< "${{ inputs.hosts_fqdn_csv }}"
+        for host in "${HOSTS[@]}"; do
+          if [[ "$host" == control* ]]; then
+            echo "Distributing CA to $host..."
+            ssh -o StrictHostKeyChecking=no ${{ inputs.ssh_username }}@$host "mkdir -p ~/.ssl"
+            scp -o StrictHostKeyChecking=no ./certs/ca.key ./certs/ca.crt ${{ inputs.ssh_username }}@$host:~/.ssl/
+          fi
+        done
+
+    - name: Generate signed certificates and Ansible inventory
+      uses: appleboy/ssh-action@v1.2.4
       env:
         SSH_USERNAME: ${{ inputs.ssh_username }}
         SSH_PRIVATE_KEY: ${{ inputs.ssh_private_key }}
@@ -47,17 +75,26 @@ runs:
           # Derive target FQDN by replacing 'control' with 'target'
           TARGET_FQDN="${CURRENT_FQDN/control/target}"
 
-          # Setup SSH private key for Ansible to connect to target nodes
+          # Setup SSH private key for Ansible and for communicating with target nodes
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          # Add target to known_hosts to avoid interactive prompt
+          ssh-keyscan -H "$TARGET_FQDN" >> ~/.ssh/known_hosts 2>/dev/null
 
-          # Generate SSL certificate for nginx
+          # Prepare SSL certificates directory
           CERTS_DIR="$HOME/.ssl"
-          mkdir -p "$CERTS_DIR"
-          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.crt" \
-            -subj "/CN=${TARGET_FQDN}" -addext "subjectAltName=DNS:${TARGET_FQDN}"
+          chmod 600 "$CERTS_DIR/ca.key"
+
+          echo "Generating signed certificate for $TARGET_FQDN..."
+          # 2. Generate Server key and CSR
+          openssl genrsa -out "$CERTS_DIR/trento.key" 2048
+          openssl req -new -key "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.csr" -subj "/CN=$TARGET_FQDN"
+
+          # 3. Sign the Server certificate with the CA
+          openssl x509 -req -in "$CERTS_DIR/trento.csr" -CA "$CERTS_DIR/ca.crt" -CAkey "$CERTS_DIR/ca.key" -CAcreateserial \
+            -out "$CERTS_DIR/trento.crt" -days 365 -sha256 \
+            -extfile <(echo "subjectAltName=DNS:$TARGET_FQDN")
 
           # Create Ansible inventory directory if it doesn't exist
           sudo mkdir -p /etc/ansible
@@ -75,14 +112,18 @@ runs:
               trento_hosts:
                 vars:
                   ${PYTHON_INTERPRETER_LINE}
-                  provision_prometheus: false
+                  provision_prometheus: true
                   provision_proxy: true
+                  rproxy_provision_prometheus: true
+                  trento_prometheus_port: 9095
+                  trento_prometheus_auth: "none"
+                  rproxy_prometheus_auth: "none"
                   web_postgres_password: "postgres"
                   wanda_postgres_password: "postgres"
                   rabbitmq_password: "admin"
                   web_admin_password: "$WEB_ADMIN_PASSWORD"
                   trento_web_listen_port: 4000
-                  trento_web_listen_port: 4001
+                  trento_wanda_listen_port: 4001
                   trento_server_name: "{{ inventory_hostname }}"
                   trento_server_url: "https://{{ inventory_hostname }}"
                   nginx_vhost_filename: "{{ inventory_hostname }}"
@@ -92,6 +133,9 @@ runs:
                   ${TARGET_FQDN}:
                     ansible_user: $SSH_USERNAME
               trento_server:
+                children:
+                  trento_hosts: {}
+              prometheus_hosts:
                 children:
                   trento_hosts: {}
               postgres_hosts:

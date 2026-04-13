@@ -1,5 +1,5 @@
 name: 'Setup RPM Repository'
-description: 'Setup local RPM repository on control and target machines from Azure blob storage'
+description: 'Setup local RPM repository on control and target machines from Azure blob storage or rolling repository'
 
 inputs:
   hosts_fqdn_csv:
@@ -20,6 +20,10 @@ inputs:
   azure_blob_storage_sas_token:
     description: 'Azure blob storage SAS token'
     required: true
+  install_rolling:
+    description: 'Whether to install the rolling version of the packages'
+    required: false
+    default: 'false'
 
 runs:
   using: 'composite'
@@ -34,11 +38,28 @@ runs:
           set -e
 
           HOSTNAME=$(hostname)
+          INSTALL_ANSIBLE_PACKAGE_CMD="sudo zypper --non-interactive --gpg-auto-import-keys install -y --auto-agree-with-licenses ansible-trento"
 
           # Extract SLES version from /etc/os-release (e.g., VERSION_ID="15.4")
           source /etc/os-release
           SLES_MAJOR_VERSION="${VERSION_ID%%.*}"
           SP_VERSION="${VERSION_ID##*.}"
+
+          if [ "${{ inputs.install_rolling }}" = "true" ]; then
+            if [ "$SLES_MAJOR_VERSION" = "16" ]; then
+              REPO_URL="https://download.opensuse.org/repositories/devel:/sap:/trento:/factory/SLES16.0/devel:sap:trento:factory.repo"
+            else
+              REPO_URL="https://download.opensuse.org/repositories/devel:sap:trento:factory/SLES15-Trento-SP3-SP7/devel:sap:trento:factory.repo"
+            fi
+
+            sudo zypper --non-interactive addrepo $REPO_URL 2>/dev/null || true
+            sudo zypper --non-interactive --gpg-auto-import-keys refresh
+            
+            if [[ "$HOSTNAME" != target* ]]; then
+              $INSTALL_ANSIBLE_PACKAGE_CMD
+            fi
+            exit 0
+          fi
 
           # Build version-specific blob storage URL
           URL_BASE="https://${{ inputs.azure_blob_storage }}.blob.core.windows.net/${{ inputs.azure_blob_storage_container }}"
@@ -83,5 +104,5 @@ runs:
             sudo zypper --non-interactive --no-gpg-checks install --allow-unsigned-rpm --auto-agree-with-licenses "$TEMP_DIR"/ansible-trento-*.rpm
             rm -rf "$TEMP_DIR"
           else
-            sudo zypper --non-interactive --gpg-auto-import-keys install --auto-agree-with-licenses ansible-trento
+            $INSTALL_ANSIBLE_PACKAGE_CMD
           fi
