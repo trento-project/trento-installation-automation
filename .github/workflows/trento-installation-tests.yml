@@ -11,14 +11,6 @@ on:
         description: 'Redeploy: destroy existing infrastructure before starting'
         type: boolean
         default: false
-      skip_cypress:
-        description: 'Skip Cypress tests'
-        type: boolean
-        default: false
-      cypress_spec:
-        description: 'Cypress spec to run'
-        type: string
-        default: 'cypress/e2e/**.cy.js'
 
 concurrency:
   group: trento-installation-tests
@@ -214,7 +206,6 @@ jobs:
 
   cypress-tests:
     name: Cypress Tests (${{ matrix.target_host }})
-    if: ${{ !inputs.skip_cypress }}
     needs: trento-installation-tests
     runs-on: ubuntu-24.04
     strategy:
@@ -266,11 +257,12 @@ jobs:
         env:
           cypress_video: false
           cypress_photofinish_binary: $(whereis photofinish | cut -d" " -f2)
+          cypress_wanda_mode: 'real'
+          cypress_web_mode: 'real'
         with:
           working-directory: trento-web/test/e2e
           wait-on-timeout: 30
           config: baseUrl=https://${{ matrix.target_host }},retries=3
-          spec: ${{ inputs.cypress_spec }}
 
       - name: Upload cypress test screenshots
         uses: actions/upload-artifact@v4
@@ -278,3 +270,4 @@ jobs:
         with:
           name: e2e-screenshots-${{ matrix.target_host }}
           path: trento-web/test/e2e/cypress/screenshots/
+          retention-days: 1
