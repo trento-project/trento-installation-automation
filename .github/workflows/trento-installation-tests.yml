@@ -190,19 +190,13 @@ jobs:
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
 
-      - name: Stop Trento agent on target machines
-        uses: appleboy/ssh-action@v1.2.4
+      - name: Stop Trento agent and deregister target host
+        uses: ./.github/actions/stop-agent-and-deregister-host
         with:
-          host: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
-          username: ${{ env.SSH_USERNAME }}
-          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          script: |
-            set -e
-            CURRENT_HOSTNAME=$(hostname -s)
-            if [[ "$CURRENT_HOSTNAME" != *target* ]]; then
-              exit 0
-            fi
-            sudo systemctl stop trento-agent
+          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
 
   cypress-tests:
     name: Cypress Tests (${{ matrix.target_host }})
@@ -257,8 +251,8 @@ jobs:
         env:
           cypress_video: false
           cypress_photofinish_binary: $(whereis photofinish | cut -d" " -f2)
-          cypress_wanda_mode: 'real'
-          cypress_web_mode: 'real'
+          cypress_wanda_mode: 'prod'
+          cypress_web_mode: 'prod'
         with:
           working-directory: trento-web/test/e2e
           wait-on-timeout: 30

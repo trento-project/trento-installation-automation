@@ -1,0 +1,67 @@
+name: 'Stop Trento agent and deregister host'
+description: 'Stop trento-agent and deregister the local target host from Trento'
+
+inputs:
+  hosts_fqdn_csv:
+    description: 'Comma-separated list of machine FQDNs'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+  ssh_private_key:
+    description: 'SSH private key content'
+    required: true
+  web_admin_password:
+    description: 'Trento web admin password'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Stop Trento agent and deregister host on target machines
+      uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0 # v1.2.4
+      env:
+        WEB_ADMIN_PASSWORD: ${{ inputs.web_admin_password }}
+      with:
+        host: ${{ inputs.hosts_fqdn_csv }}
+        username: ${{ inputs.ssh_username }}
+        key: ${{ inputs.ssh_private_key }}
+        envs: WEB_ADMIN_PASSWORD
+        script: |
+          set -euo pipefail
+          CURRENT_HOSTNAME=$(hostname -s)
+          if [[ "$CURRENT_HOSTNAME" != *target* ]]; then
+            exit 0
+          fi
+
+          sudo systemctl stop trento-agent
+
+          HOST_URL="https://$(hostname -f)"
+
+          login_response=$(curl --silent --show-error --fail --insecure \
+            --header "Content-Type: application/json" \
+            --request POST \
+            --data "{\"username\":\"admin\",\"password\":\"$WEB_ADMIN_PASSWORD\"}" \
+            "${HOST_URL}/api/session")
+
+          access_token=$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("access_token", ""))' <<< "$login_response")
+          if [[ -z "$access_token" ]]; then
+            echo "Error: could not get access token on ${CURRENT_HOSTNAME}"
+            exit 1
+          fi
+
+          host_id=$(curl --silent --show-error --fail --insecure \
+            --header "Authorization: Bearer ${access_token}" \
+            --request GET \
+            "${HOST_URL}/api/v1/hosts" \
+            | python3 -c 'import json,sys; hosts=json.loads(sys.stdin.read()); print(hosts[0]["id"] if hosts else "")')
+
+          if [[ -z "$host_id" ]]; then
+            echo "No registered hosts found on ${CURRENT_HOSTNAME}; skipping deregistration."
+            exit 0
+          fi
+
+          curl --silent --show-error --fail --insecure \
+            --header "Authorization: Bearer ${access_token}" \
+            --request DELETE \
+            "${HOST_URL}/api/v1/hosts/${host_id}" > /dev/null
