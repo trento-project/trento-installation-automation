@@ -78,5 +78,15 @@ runs:
         TF_VAR_ssh_public_key_content: ${{ inputs.ssh_public_key_content }}
         TF_VAR_ssh_private_key_content: ${{ inputs.ssh_private_key_content }}
       run: |
-        terraform apply -auto-approve -input=false
+        echo "Performing manual cleanup of ghost resources with tag Owner=${{ inputs.azure_owner_tag }}..."
+        # Try to destroy via Terraform first to catch what's in the state
+        terraform destroy -auto-approve -input=false || true
+        
+        # Delete VMs first to release NICs and other dependencies
+        az vm list -g ${{ inputs.azure_resource_group }} --query "[?tags.Owner=='${{ inputs.azure_owner_tag }}'].id" -o tsv | xargs -r az vm delete -y
+        
+        # Delete any remaining resources with the owner tag (NICs, PIPs, VNET, NSG)
+        az resource list -g ${{ inputs.azure_resource_group }} --tag Owner=${{ inputs.azure_owner_tag }} --query "[].id" -o tsv | xargs -r az resource delete --ids
+        
+        # Final destroy to ensure state is clear
         terraform destroy -auto-approve -input=false

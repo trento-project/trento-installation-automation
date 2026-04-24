@@ -111,7 +111,17 @@ jobs:
         if: inputs.redeploy
         working-directory: ./terraform
         run: |
-          terraform apply -auto-approve -input=false
+          echo "Performing manual cleanup of ghost resources with tag Owner=${{ vars.AZURE_OWNER_TAG }}..."
+          # Try to destroy via Terraform first to catch what's in the state
+          terraform destroy -auto-approve -input=false || true
+          
+          # Delete VMs first to release NICs and other dependencies
+          az vm list -g ${{ vars.AZURE_RESOURCE_GROUP }} --query "[?tags.Owner=='${{ vars.AZURE_OWNER_TAG }}'].id" -o tsv | xargs -r az vm delete -y
+          
+          # Delete any remaining resources with the owner tag (NICs, PIPs, VNET, NSG)
+          az resource list -g ${{ vars.AZURE_RESOURCE_GROUP }} --tag Owner=${{ vars.AZURE_OWNER_TAG }} --query "[].id" -o tsv | xargs -r az resource delete --ids
+          
+          # Final destroy to ensure state is clear
           terraform destroy -auto-approve -input=false
         env:
           TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
