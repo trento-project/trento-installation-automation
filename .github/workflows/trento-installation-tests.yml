@@ -110,7 +110,9 @@ jobs:
       - name: Terraform Destroy (Redeploy)
         if: inputs.redeploy
         working-directory: ./terraform
-        run: terraform destroy -auto-approve -input=false
+        run: |
+          terraform apply -auto-approve -input=false
+          terraform destroy -auto-approve -input=false
         env:
           TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
           TF_VAR_azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
