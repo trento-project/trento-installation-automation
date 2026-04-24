@@ -190,14 +190,6 @@ jobs:
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
 
-      - name: Stop Trento agent and deregister target host
-        uses: ./.github/actions/stop-agent-and-deregister-host
-        with:
-          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
-          ssh_username: ${{ env.SSH_USERNAME }}
-          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
-
   cypress-tests:
     name: Cypress Tests (${{ matrix.target_host }})
     needs: trento-installation-tests
@@ -245,6 +237,13 @@ jobs:
         run: |
           cd trento-web/assets
           npm ci
+
+      - name: Stop Trento agent on target host
+        uses: ./.github/actions/stop-trento-agent
+        with:
+          target_host_fqdn: ${{ matrix.target_host }}
+          ssh_username: cloudadmin
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
       - name: Cypress run
         uses: cypress-io/github-action@v6
