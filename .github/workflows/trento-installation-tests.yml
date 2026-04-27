@@ -16,6 +16,7 @@ env:
   AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
   AZURE_BLOB_STORAGE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_CONTAINER }}
   AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
+  SSH_USERNAME: cloudadmin
 
 jobs:
   trento-installation-tests:
@@ -24,9 +25,6 @@ jobs:
 
     permissions:
       contents: read
-
-    env:
-      SSH_USERNAME: cloudadmin
 
     outputs:
       target_hosts_json: ${{ steps.get-hosts.outputs.target_hosts_json }}
