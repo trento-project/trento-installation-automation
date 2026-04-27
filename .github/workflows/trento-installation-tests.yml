@@ -115,7 +115,6 @@ jobs:
           TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
           TF_VAR_azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
           TF_VAR_ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
-          TF_VAR_ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
       - name: Terraform Plan
         id: plan
@@ -242,7 +241,7 @@ jobs:
         uses: ./.github/actions/stop-trento-agent
         with:
           target_host_fqdn: ${{ matrix.target_host }}
-          ssh_username: cloudadmin
+          ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
       - name: Cypress run
