@@ -201,7 +201,6 @@ jobs:
         with:
           repository: trento-project/web
           path: trento-web
-          ref: adapt-e2e-tests-for-remote-instance
 
       - name: Download CA certificate artifact
         uses: actions/download-artifact@v4
