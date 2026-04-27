@@ -7,10 +7,6 @@ on:
         description: 'Install rolling version of packages'
         type: boolean
         default: false
-      redeploy:
-        description: 'Redeploy: destroy existing infrastructure before starting'
-        type: boolean
-        default: false
 
 concurrency:
   group: trento-installation-tests
@@ -107,14 +103,14 @@ jobs:
           echo "ARM_SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID" >> $GITHUB_ENV
           echo "Subscription ID set successfully"
 
-      - name: Terraform Destroy (Redeploy)
-        if: inputs.redeploy
+      - name: Terraform Destroy
         working-directory: ./terraform
         run: terraform destroy -auto-approve -input=false
         env:
           TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
           TF_VAR_azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
           TF_VAR_ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
+          TF_VAR_ssh_private_key_content: ""
 
       - name: Terraform Plan
         id: plan
