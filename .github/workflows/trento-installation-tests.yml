@@ -195,10 +195,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Checkout Trento Web tests
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: trento-project/web
           path: trento-web
@@ -220,7 +220,7 @@ jobs:
           echo "NODE_EXTRA_CA_CERTS=${{ github.workspace }}/certs/ca.crt" >> $GITHUB_ENV
 
       - name: Install photofinish
-        uses: jaxxstorm/action-install-gh-release@v2.1.0
+        uses: jaxxstorm/action-install-gh-release@6096f2a2bbfee498ced520b6922ac2c06e990ed2 # v2.1.0
         with:
           repo: trento-project/photofinish
           tag: v1.4.2
@@ -230,10 +230,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install web assets dependencies
-        run: |
-          cd trento-web/assets
-          npm ci
-
+        run: cd trento-web/assets && npm ci
       - name: Stop Trento agent on target host
         uses: ./.github/actions/stop-trento-agent
         with:
@@ -242,7 +239,7 @@ jobs:
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
       - name: Cypress run
-        uses: cypress-io/github-action@v6
+        uses: cypress-io/github-action@f790eee7a50d9505912f50c2095510be7de06aa7 # v6
         env:
           cypress_video: false
           cypress_photofinish_binary: $(whereis photofinish | cut -d" " -f2)
@@ -251,10 +248,10 @@ jobs:
         with:
           working-directory: trento-web/test/e2e
           wait-on-timeout: 30
-          config: baseUrl=https://${{ matrix.target_host }},retries=3
+          config: baseUrl=https://${{ matrix.target_host }},retries=2
 
       - name: Upload cypress test screenshots
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
           name: e2e-screenshots-${{ matrix.target_host }}
