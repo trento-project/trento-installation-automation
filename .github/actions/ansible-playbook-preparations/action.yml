@@ -15,37 +15,9 @@ inputs:
     description: 'Trento web admin password'
     required: true
 
-outputs:
-  ca_cert_path:
-    description: 'Path to the generated CA certificate'
-    value: ${{ steps.generate-ca.outputs.ca_cert_path }}
-
 runs:
   using: 'composite'
   steps:
-    - name: Generate Local CA on GitHub Runner
-      shell: bash
-      id: generate-ca
-      run: |
-        mkdir -p ./certs
-        CERTS_DIR="$(pwd)/certs"
-        echo "Generating Local CA on GitHub Runner..."
-        openssl genrsa -out "$CERTS_DIR/ca.key" 2048
-        openssl req -x509 -new -nodes -key "$CERTS_DIR/ca.key" -sha256 -days 3650 -out "$CERTS_DIR/ca.crt" -subj "/CN=Trento Test CA"
-        echo "ca_cert_path=$CERTS_DIR/ca.crt" >> $GITHUB_OUTPUT
-
-    - name: Distribute CA to control nodes
-      shell: bash
-      run: |
-        IFS=',' read -ra HOSTS <<< "${{ inputs.hosts_fqdn_csv }}"
-        for host in "${HOSTS[@]}"; do
-          if [[ "$host" == control* ]]; then
-            echo "Distributing CA to $host..."
-            ssh -o StrictHostKeyChecking=no ${{ inputs.ssh_username }}@$host "mkdir -p ~/.ssl"
-            scp -o StrictHostKeyChecking=no ./certs/ca.key ./certs/ca.crt ${{ inputs.ssh_username }}@$host:~/.ssl/
-          fi
-        done
-
     - name: Generate signed certificates and Ansible inventory
       uses: appleboy/ssh-action@v1.2.4
       env:
@@ -87,7 +59,7 @@ runs:
           chmod 600 "$CERTS_DIR/ca.key"
 
           echo "Generating signed certificate for $TARGET_FQDN..."
-          # 2. Generate Server key and CSR
+          # 2. Generate Server key and Certificate Signing Request (CSR)
           openssl genrsa -out "$CERTS_DIR/trento.key" 2048
           openssl req -new -key "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.csr" -subj "/CN=$TARGET_FQDN"
 

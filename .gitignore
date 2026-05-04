@@ -1,6 +1,9 @@
 # Machine configuration
 *.machines.conf.csv
 
+# Local test certificates
+/certs/
+
 # Terraform state files
 /terraform/*.tfstate
 /terraform/*.tfstate.*

@@ -1,0 +1,59 @@
+name: 'Setup Test CA'
+description: 'Load the test certificate authority from secrets and distribute it to control nodes'
+
+inputs:
+  hosts_fqdn_csv:
+    description: 'Comma-separated list of machine FQDNs'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+  ca_cert:
+    description: 'Certificate for the test certificate authority'
+    required: true
+  ca_key:
+    description: 'Private key for the test certificate authority'
+    required: true
+
+outputs:
+  ca_cert_path:
+    description: 'Path to the test CA certificate'
+    value: ${{ steps.load-ca.outputs.ca_cert_path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Load test CA from secrets
+      shell: bash
+      id: load-ca
+      run: |
+        set -euo pipefail
+        mkdir -p ./certs
+        CERTS_DIR="$(pwd)/certs"
+
+        cat > "$CERTS_DIR/ca.crt" <<'EOF_CA_CRT'
+        ${{ inputs.ca_cert }}
+        EOF_CA_CRT
+
+        cat > "$CERTS_DIR/ca.key" <<'EOF_CA_KEY'
+        ${{ inputs.ca_key }}
+        EOF_CA_KEY
+
+        chmod 600 "$CERTS_DIR/ca.key"
+        openssl x509 -in "$CERTS_DIR/ca.crt" -noout > /dev/null
+        openssl rsa -in "$CERTS_DIR/ca.key" -check -noout > /dev/null
+
+        echo "ca_cert_path=$CERTS_DIR/ca.crt" >> "$GITHUB_OUTPUT"
+
+    - name: Distribute CA to control nodes
+      shell: bash
+      run: |
+        set -euo pipefail
+        IFS=',' read -ra HOSTS <<< "${{ inputs.hosts_fqdn_csv }}"
+        for host in "${HOSTS[@]}"; do
+          if [[ "$host" == control* ]]; then
+            echo "Distributing CA to $host..."
+            ssh -o StrictHostKeyChecking=no ${{ inputs.ssh_username }}@$host "mkdir -p ~/.ssl"
+            scp -o StrictHostKeyChecking=no ./certs/ca.key ./certs/ca.crt ${{ inputs.ssh_username }}@$host:~/.ssl/
+          fi
+        done
