@@ -15,17 +15,11 @@ inputs:
     description: 'Private key for the test certificate authority'
     required: true
 
-outputs:
-  ca_cert_path:
-    description: 'Path to the test CA certificate'
-    value: ${{ steps.load-ca.outputs.ca_cert_path }}
-
 runs:
   using: 'composite'
   steps:
     - name: Load test CA from secrets
       shell: bash
-      id: load-ca
       run: |
         set -euo pipefail
         mkdir -p ./certs
@@ -42,8 +36,6 @@ runs:
         chmod 600 "$CERTS_DIR/ca.key"
         openssl x509 -in "$CERTS_DIR/ca.crt" -noout > /dev/null
         openssl rsa -in "$CERTS_DIR/ca.key" -check -noout > /dev/null
-
-        echo "ca_cert_path=$CERTS_DIR/ca.crt" >> "$GITHUB_OUTPUT"
 
     - name: Distribute CA to control nodes
       shell: bash

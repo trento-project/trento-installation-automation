@@ -156,7 +156,6 @@ jobs:
           install_rolling: ${{ inputs.install_rolling }}
 
       - name: Setup test CA
-        id: setup-test-ca
         uses: ./.github/actions/setup-test-ca
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
@@ -173,13 +172,6 @@ jobs:
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
 
-      - name: Upload CA certificate artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: trento-ca-cert
-          path: ${{ steps.setup-test-ca.outputs.ca_cert_path }}
-          retention-days: 1
-
       - name: Run Ansible Trento playbook
         uses: ./.github/actions/run-ansible-trento-playbook
         with:
@@ -192,76 +184,79 @@ jobs:
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
 
-  # cypress-tests:
-  #   name: Cypress Tests (${{ matrix.target_host }})
-  #   needs: trento-installation-tests
-  #   runs-on: ubuntu-24.04
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       target_host: ${{ fromJson(needs.trento-installation-tests.outputs.target_hosts_json) }}
+  cypress-tests:
+    name: Cypress Tests (${{ matrix.target_host }})
+    needs: trento-installation-tests
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target_host: ${{ fromJson(needs.trento-installation-tests.outputs.target_hosts_json) }}
 
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  #     - name: Checkout Trento Web tests
-  #       uses: actions/checkout@v4
-  #       with:
-  #         repository: trento-project/web
-  #         path: trento-web
+      - name: Checkout Trento Web tests
+        uses: actions/checkout@v4
+        with:
+          repository: trento-project/web
+          path: trento-web
 
-  #     - name: Download CA certificate artifact
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: trento-ca-cert
-  #         path: certs
+      - name: Load test CA certificate
+        run: |
+          set -euo pipefail
+          mkdir -p certs
+          cat > certs/ca.crt <<'EOF_CA_CRT'
+          ${{ secrets.TRENTO_TEST_CA_CRT }}
+          EOF_CA_CRT
+          openssl x509 -in certs/ca.crt -noout > /dev/null
 
-  #     - name: Trust CA certificate
-  #       run: |
-  #         sudo mkdir -p /usr/local/share/ca-certificates/
-  #         sudo cp certs/ca.crt /usr/local/share/ca-certificates/trento-ca.crt
-  #         sudo update-ca-certificates
-  #         echo "NODE_EXTRA_CA_CERTS=${{ github.workspace }}/certs/ca.crt" >> $GITHUB_ENV
+      - name: Trust CA certificate
+        run: |
+          sudo mkdir -p /usr/local/share/ca-certificates/
+          sudo cp certs/ca.crt /usr/local/share/ca-certificates/trento-ca.crt
+          sudo update-ca-certificates
+          echo "NODE_EXTRA_CA_CERTS=${{ github.workspace }}/certs/ca.crt" >> $GITHUB_ENV
 
-  #     - name: Install photofinish
-  #       uses: jaxxstorm/action-install-gh-release@v2.1.0
-  #       with:
-  #         repo: trento-project/photofinish
-  #         tag: v1.4.2
-  #         cache: enable
-  #         chmod: 0755
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install photofinish
+        uses: jaxxstorm/action-install-gh-release@v2.1.0
+        with:
+          repo: trento-project/photofinish
+          tag: v1.4.2
+          cache: enable
+          chmod: 0755
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  #     - name: Install web assets dependencies
-  #       run: |
-  #         cd trento-web/assets
-  #         npm ci
+      - name: Install web assets dependencies
+        run: |
+          cd trento-web/assets
+          npm ci
 
-  #     - name: Stop Trento agent on target host
-  #       uses: ./.github/actions/stop-trento-agent
-  #       with:
-  #         target_host_fqdn: ${{ matrix.target_host }}
-  #         ssh_username: ${{ env.SSH_USERNAME }}
-  #         ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+      - name: Stop Trento agent on target host
+        uses: ./.github/actions/stop-trento-agent
+        with:
+          target_host_fqdn: ${{ matrix.target_host }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
-  #     - name: Cypress run
-  #       uses: cypress-io/github-action@v6
-  #       env:
-  #         cypress_video: false
-  #         cypress_photofinish_binary: $(whereis photofinish | cut -d" " -f2)
-  #         cypress_wanda_mode: 'prod'
-  #         cypress_web_mode: 'prod'
-  #       with:
-  #         working-directory: trento-web/test/e2e
-  #         wait-on-timeout: 30
-  #         config: baseUrl=https://${{ matrix.target_host }},retries=3
+      - name: Cypress run
+        uses: cypress-io/github-action@v6
+        env:
+          cypress_video: false
+          cypress_photofinish_binary: $(whereis photofinish | cut -d" " -f2)
+          cypress_wanda_mode: 'prod'
+          cypress_web_mode: 'prod'
+        with:
+          working-directory: trento-web/test/e2e
+          wait-on-timeout: 30
+          config: baseUrl=https://${{ matrix.target_host }},retries=3
 
-  #     - name: Upload cypress test screenshots
-  #       uses: actions/upload-artifact@v4
-  #       if: failure()
-  #       with:
-  #         name: e2e-screenshots-${{ matrix.target_host }}
-  #         path: trento-web/test/e2e/cypress/screenshots/
-  #         retention-days: 1
+      - name: Upload cypress test screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-screenshots-${{ matrix.target_host }}
+          path: trento-web/test/e2e/cypress/screenshots/
+          retention-days: 1
