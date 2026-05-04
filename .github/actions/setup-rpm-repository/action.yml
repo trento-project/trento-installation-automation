@@ -45,6 +45,7 @@ runs:
           SLES_MAJOR_VERSION="${VERSION_ID%%.*}"
           SP_VERSION="${VERSION_ID##*.}"
 
+          # When install_rolling is true, configure the OBS rolling repository and skip the Azure Blob repository setup.
           if [ "${{ inputs.install_rolling }}" = "true" ]; then
             if [ "$SLES_MAJOR_VERSION" = "16" ]; then
               REPO_URL="https://download.opensuse.org/repositories/devel:/sap:/trento:/factory/SLES16.0/devel:sap:trento:factory.repo"
@@ -53,6 +54,7 @@ runs:
             fi
 
             sudo zypper --non-interactive addrepo $REPO_URL 2>/dev/null || true
+            sudo zypper --non-interactive modifyrepo --priority 1 devel_sap_trento_factory
             sudo zypper --non-interactive --gpg-auto-import-keys refresh
             
             if [[ "$HOSTNAME" != target* ]]; then
