@@ -9,7 +9,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Build health check URL list & set --insecure flag
+    - name: Build health check URL list
       id: build-urls
       shell: bash
       run: |
@@ -32,9 +32,6 @@ runs:
         fi
 
         echo "urls=$urls" >> $GITHUB_OUTPUT
-        
-        # Allow curl to connect to HTTPS endpoints with self-signed certificates
-        echo "--insecure" >> ~/.curlrc
 
     - name: Check Trento health endpoints
       uses: jtalk/url-health-check-action@b716ccb6645355dd9fcce8002ce460e5474f7f00 # v4
