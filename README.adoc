@@ -4,10 +4,17 @@ Automated testing infrastructure for Trento release candidate artifacts. This to
 
 == Overview
 
-The workflow has two main phases:
+The workflow:
 
-. **Provision infrastructure & deploy Trento**: provisions Azure VMs, registers SUSE machines, configures package sources from Azure Blob Storage or the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS], installs Trento with Ansible, configures HTTPS certificates, and verifies health endpoints.
-. **Run Cypress tests**: runs Cypress end-to-end tests against every target node.
+. Provision Azure VMs (control and target nodes) using Terraform
+. Register SUSE machines and activates required modules
+. Configure package sources from Azure Blob Storage or the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS]
+. Set up local RPM repositories on target machines when using packages from Azure Blob Storage
+. Install the Trento Ansible collection on control machines
+. Configure HTTPS certificates signed by a test certificate authority
+. Run the `suse.trento.site` Ansible playbook to install Trento & Trento agent (Agents are installed on same machine as Trento server).
+. Verify Healthcheck endpoints in every Trento instance from the runner
+. Run Cypress end-to-end tests against every target node
 
 == Infrastructure
 
