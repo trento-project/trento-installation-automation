@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
 name: 'Verify Trento Health'
 description: 'Verify Trento readyz and healthz endpoints on target machines'
 

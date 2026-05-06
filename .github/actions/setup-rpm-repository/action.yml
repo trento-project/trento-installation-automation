@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
 name: 'Setup RPM Repository'
 description: 'Setup local RPM repository on control and target machines from Azure blob storage'
 
