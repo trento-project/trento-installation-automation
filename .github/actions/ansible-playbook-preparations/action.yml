@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
 name: 'Ansible Playbook Preparations'
 description: 'Prepare control nodes for Ansible playbook execution (SSH keys, SSL certs, inventory generation)'
 

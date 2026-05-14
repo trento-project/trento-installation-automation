@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
 name: 'Get Machine Hosts'
 description: 'Get a list of machine hostnames from a CSV configuration file'
 

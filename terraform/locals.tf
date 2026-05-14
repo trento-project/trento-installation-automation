@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
 data "local_file" "machines_csv_file" {
   filename = "../.machines.conf.csv"
 }
