@@ -197,7 +197,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
-      matrix:he puest
+      matrix:
         target_host: ${{ fromJson(needs.provision-and-deploy.outputs.target_hosts_json) }}
 
     steps:
