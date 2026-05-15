@@ -61,7 +61,6 @@ runs:
             echo "Missing test CA files in $CERTS_DIR. Run setup-test-ca before ansible-playbook-preparations." >&2
             exit 1
           fi
-          chmod 600 "$CERTS_DIR/ca.key"
           # Validate the CA files before using them to sign the Trento certificate.
           if ! openssl x509 -in "$CERTS_DIR/ca.crt" -noout > /dev/null; then
             echo "Invalid test CA certificate: $CERTS_DIR/ca.crt" >&2

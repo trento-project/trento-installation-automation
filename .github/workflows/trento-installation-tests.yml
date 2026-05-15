@@ -23,9 +23,6 @@ jobs:
     name: Provision infrastructure & deploy Trento
     runs-on: ubuntu-24.04
 
-    permissions:
-      contents: read
-
     outputs:
       target_hosts_json: ${{ steps.get-hosts.outputs.target_hosts_json }}
 
@@ -160,7 +157,7 @@ jobs:
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
           ssh_username: ${{ env.SSH_USERNAME }}
-          ca_cert: ${{ secrets.TRENTO_TEST_CA_CRT }}
+          ca_cert: ${{ vars.TRENTO_TEST_CA_CRT }}
           ca_key: ${{ secrets.TRENTO_TEST_CA_KEY }}
 
       - name: Generate Certs & Ansible inventory
@@ -182,7 +179,7 @@ jobs:
       - name: Trust test CA certificate
         run: |
           sudo mkdir -p /usr/local/share/ca-certificates/
-          sudo cp certs/ca.crt /usr/local/share/ca-certificates/trento-ca.crt
+          sudo cp "$TRENTO_TEST_CA_CERT_PATH" /usr/local/share/ca-certificates/trento-ca.crt
           sudo update-ca-certificates
 
       - name: Verify Trento instances healthcheck endpoints
@@ -209,21 +206,18 @@ jobs:
           repository: trento-project/web
           path: trento-web
 
-      - name: Load test CA certificate
+      - name: Trust test CA certificate
         run: |
           set -euo pipefail
-          mkdir -p certs
-          cat > certs/ca.crt <<'EOF_CA_CRT'
-          ${{ secrets.TRENTO_TEST_CA_CRT }}
+          CA_CERT_FILE="${RUNNER_TEMP}/trento-ca.crt"
+          cat > "$CA_CERT_FILE" <<'EOF_CA_CRT'
+          ${{ vars.TRENTO_TEST_CA_CRT }}
           EOF_CA_CRT
-          openssl x509 -in certs/ca.crt -noout > /dev/null
-
-      - name: Trust CA certificate
-        run: |
+          openssl x509 -in "$CA_CERT_FILE" -noout > /dev/null
           sudo mkdir -p /usr/local/share/ca-certificates/
-          sudo cp certs/ca.crt /usr/local/share/ca-certificates/trento-ca.crt
+          sudo cp "$CA_CERT_FILE" /usr/local/share/ca-certificates/trento-ca.crt
           sudo update-ca-certificates
-          echo "NODE_EXTRA_CA_CERTS=${{ github.workspace }}/certs/ca.crt" >> $GITHUB_ENV
+          echo "NODE_EXTRA_CA_CERTS=$CA_CERT_FILE" >> "$GITHUB_ENV"
 
       - name: Install photofinish
         uses: jaxxstorm/action-install-gh-release@6096f2a2bbfee498ced520b6922ac2c06e990ed2 # v2.1.0
@@ -237,6 +231,8 @@ jobs:
 
       - name: Install web assets dependencies
         run: cd trento-web/assets && npm ci
+
+      # The installation phase deploys a real agent; stop it before Cypress generates photofinish data to avoid conflicts during tests execution.
       - name: Stop Trento agent on target host
         uses: ./.github/actions/stop-trento-agent
         with:

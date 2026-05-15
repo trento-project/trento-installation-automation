@@ -89,9 +89,6 @@ NOTE: When `install_rolling` is disabled, packages available in Azure Blob Stora
 | `WEB_ADMIN_PASSWORD`
 | Trento web admin password
 
-| `TRENTO_TEST_CA_CRT`
-| Public certificate of the test certificate authority used to sign Trento HTTPS certificates
-
 | `TRENTO_TEST_CA_KEY`
 | Private key of the test certificate authority used to sign Trento HTTPS certificates
 |===
@@ -100,7 +97,7 @@ NOTE: When `install_rolling` is disabled, packages available in Azure Blob Stora
 
 `TRENTO_TEST_CA_CRT` and `TRENTO_TEST_CA_KEY` must belong to the same test certificate authority. The workflow uses them to sign the HTTPS certificates configured in the Trento reverse proxy, and the runner trusts `TRENTO_TEST_CA_CRT` before running health checks and Cypress tests.
 
-`TRENTO_TEST_CA_CRT` is public and can be imported locally by developers who need to access the generated Trento environments from a browser. `TRENTO_TEST_CA_KEY` is sensitive and should only be stored in GitHub Actions secrets and the team's password vault.
+`TRENTO_TEST_CA_CRT` is public and should be stored as a GitHub Actions variable. It can be imported locally by developers who need to access the generated Trento environments from a browser. `TRENTO_TEST_CA_KEY` is sensitive and should only be stored in GitHub Actions secrets and the team's password vault.
 
 ==== Variables
 
@@ -128,6 +125,9 @@ NOTE: When `install_rolling` is disabled, packages available in Azure Blob Stora
 
 | `SUPPORTED_OS_VERSIONS`
 | Newline-separated list of SLES versions to test (see below)
+
+| `TRENTO_TEST_CA_CRT`
+| Public certificate of the test certificate authority used to sign Trento HTTPS certificates
 |===
 
 === Supported OS Versions Configuration
