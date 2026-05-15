@@ -153,6 +153,7 @@ jobs:
           install_rolling: ${{ inputs.install_rolling }}
 
       - name: Setup test CA
+        id: setup-test-ca
         uses: ./.github/actions/setup-test-ca
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
@@ -179,7 +180,7 @@ jobs:
       - name: Trust test CA certificate
         run: |
           sudo mkdir -p /usr/local/share/ca-certificates/
-          sudo cp "$TRENTO_TEST_CA_CERT_PATH" /usr/local/share/ca-certificates/trento-ca.crt
+          sudo cp "${{ steps.setup-test-ca.outputs.ca_cert_path }}" /usr/local/share/ca-certificates/trento-ca.crt
           sudo update-ca-certificates
 
       - name: Verify Trento instances healthcheck endpoints
@@ -193,7 +194,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
-      matrix:
+      matrix:he puest
         target_host: ${{ fromJson(needs.provision-and-deploy.outputs.target_hosts_json) }}
 
     steps:
@@ -209,13 +210,12 @@ jobs:
       - name: Trust test CA certificate
         run: |
           set -euo pipefail
-          CA_CERT_FILE="${RUNNER_TEMP}/trento-ca.crt"
-          cat > "$CA_CERT_FILE" <<'EOF_CA_CRT'
+          CA_CERT_FILE="/usr/local/share/ca-certificates/trento-ca.crt"
+          sudo mkdir -p /usr/local/share/ca-certificates/
+          sudo tee "$CA_CERT_FILE" > /dev/null <<'EOF_CA_CRT'
           ${{ vars.TRENTO_TEST_CA_CRT }}
           EOF_CA_CRT
           openssl x509 -in "$CA_CERT_FILE" -noout > /dev/null
-          sudo mkdir -p /usr/local/share/ca-certificates/
-          sudo cp "$CA_CERT_FILE" /usr/local/share/ca-certificates/trento-ca.crt
           sudo update-ca-certificates
           echo "NODE_EXTRA_CA_CERTS=$CA_CERT_FILE" >> "$GITHUB_ENV"
 
