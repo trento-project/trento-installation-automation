@@ -8,12 +8,13 @@ The workflow:
 
 . Provision Azure VMs (control and target nodes) using Terraform
 . Register SUSE machines and activates required modules
-. Download release candidate RPMs from Azure Blob Storage
-. Set up local RPM repositories on target machines
+. Configure package sources from Azure Blob Storage or the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS]
+. Set up local RPM repositories on target machines when using packages from Azure Blob Storage
 . Install the Trento Ansible collection on control machines
+. Configure HTTPS certificates signed by a test certificate authority
 . Run the `suse.trento.site` Ansible playbook to install Trento & Trento agent (Agents are installed on same machine as Trento server).
-. Verify Healthcheck endpoints in every Trento instance from the runner.
-. Optionally destroy the infrastructure after tests
+. Verify Healthcheck endpoints in every Trento instance from the runner
+. Run Cypress end-to-end tests against every target node
 
 == Infrastructure
 
@@ -60,7 +61,7 @@ Each version directory should contain:
 * `trento-agent-*.rpm` - Trento agent
 * `ansible-trento-*.rpm` - Ansible collection for Trento installation
 
-NOTE: If a package is not provided in blob storage, it will be installed from the official SUSE release sources instead. This is useful when you want to test only a specific package (e.g., Ansible) while installing the rest from official SUSE release sources, or vice versa.
+NOTE: When `install_rolling` is disabled, packages available in Azure Blob Storage are configured with the highest repository priority. If a package is not provided in blob storage, it will be installed from the official SUSE release sources instead. This is useful when you want to test only a specific package (e.g., Ansible) while installing the rest from official SUSE release sources, or vice versa. When `install_rolling` is enabled, the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS] is configured with the highest repository priority and Azure Blob Storage is skipped.
 
 === GitHub Configuration
 
@@ -87,7 +88,16 @@ NOTE: If a package is not provided in blob storage, it will be installed from th
 
 | `WEB_ADMIN_PASSWORD`
 | Trento web admin password
+
+| `TRENTO_TEST_CA_KEY`
+| Private key of the test certificate authority used to sign Trento HTTPS certificates
 |===
+
+===== Test certificate authority
+
+`TRENTO_TEST_CA_CRT` and `TRENTO_TEST_CA_KEY` must belong to the same test certificate authority. The workflow uses them to sign the HTTPS certificates configured in the Trento reverse proxy, and the runner trusts `TRENTO_TEST_CA_CRT` before running health checks and Cypress tests.
+
+`TRENTO_TEST_CA_CRT` is public and should be stored as a GitHub Actions variable. It can be imported locally by developers who need to access the generated Trento environments from a browser. `TRENTO_TEST_CA_KEY` is sensitive and should only be stored in GitHub Actions secrets and the team's password vault.
 
 ==== Variables
 
@@ -115,6 +125,9 @@ NOTE: If a package is not provided in blob storage, it will be installed from th
 
 | `SUPPORTED_OS_VERSIONS`
 | Newline-separated list of SLES versions to test (see below)
+
+| `TRENTO_TEST_CA_CRT`
+| Public certificate of the test certificate authority used to sign Trento HTTPS certificates
 |===
 
 === Supported OS Versions Configuration
@@ -137,8 +150,10 @@ Each entry creates a control and target VM pair for that SLES version. The forma
 
 . Go to **Actions** > **Trento Installation Tests**
 . Click **Run workflow**
-. Optionally check "Destroy infrastructure after tests"
+. Optionally enable `install_rolling` to install packages from the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS] instead of Azure Blob Storage
 . Click **Run workflow**
+
+The workflow always recreates the Terraform-managed infrastructure before installing Trento. After installation, Cypress end-to-end tests run against each target node. If Cypress fails, screenshots are uploaded as workflow artifacts.
 
 === Cleanup
 

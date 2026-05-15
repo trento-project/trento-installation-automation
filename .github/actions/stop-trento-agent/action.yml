@@ -1,0 +1,31 @@
+name: 'Stop Trento agent'
+description: 'Stop trento-agent on a target host'
+
+inputs:
+  target_host_fqdn:
+    description: 'Target machine FQDN'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+  ssh_private_key:
+    description: 'SSH private key content'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Stop Trento agent on target host
+      uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0 # v1.2.4
+      with:
+        host: ${{ inputs.target_host_fqdn }}
+        username: ${{ inputs.ssh_username }}
+        key: ${{ inputs.ssh_private_key }}
+        script: |
+          set -euo pipefail
+          CURRENT_HOSTNAME=$(hostname -s)
+          if [[ "$CURRENT_HOSTNAME" != *target* ]]; then
+            exit 0
+          fi
+
+          sudo systemctl stop trento-agent

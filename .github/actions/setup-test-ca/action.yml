@@ -1,0 +1,59 @@
+name: 'Setup Test CA'
+description: 'Load the test certificate authority and distribute it to control nodes'
+
+inputs:
+  hosts_fqdn_csv:
+    description: 'Comma-separated list of machine FQDNs'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+  ca_cert:
+    description: 'Certificate for the test certificate authority'
+    required: true
+  ca_key:
+    description: 'Private key for the test certificate authority'
+    required: true
+
+outputs:
+  ca_cert_path:
+    description: 'Path to the loaded test CA certificate'
+    value: ${{ steps.load-test-ca.outputs.ca_cert_path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Load test CA
+      id: load-test-ca
+      shell: bash
+      run: |
+        set -euo pipefail
+        CERTS_DIR="${RUNNER_TEMP}/trento-test-ca"
+        mkdir -p "$CERTS_DIR"
+
+        cat > "$CERTS_DIR/ca.crt" <<'EOF_CA_CRT'
+        ${{ inputs.ca_cert }}
+        EOF_CA_CRT
+
+        cat > "$CERTS_DIR/ca.key" <<'EOF_CA_KEY'
+        ${{ inputs.ca_key }}
+        EOF_CA_KEY
+
+        chmod 600 "$CERTS_DIR/ca.key"
+        openssl x509 -in "$CERTS_DIR/ca.crt" -noout > /dev/null
+        openssl rsa -in "$CERTS_DIR/ca.key" -check -noout > /dev/null
+        echo "ca_cert_path=$CERTS_DIR/ca.crt" >> "$GITHUB_OUTPUT"
+
+    - name: Distribute CA to control nodes
+      shell: bash
+      run: |
+        set -euo pipefail
+        CERTS_DIR="${RUNNER_TEMP}/trento-test-ca"
+        IFS=',' read -ra HOSTS <<< "${{ inputs.hosts_fqdn_csv }}"
+        for host in "${HOSTS[@]}"; do
+          if [[ "$host" == control* ]]; then
+            echo "Distributing CA to $host..."
+            ssh -o StrictHostKeyChecking=no ${{ inputs.ssh_username }}@$host "mkdir -p ~/.ssl"
+            scp -o StrictHostKeyChecking=no "$CERTS_DIR/ca.key" "$CERTS_DIR/ca.crt" ${{ inputs.ssh_username }}@$host:~/.ssl/
+          fi
+        done
