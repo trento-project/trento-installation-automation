@@ -54,10 +54,15 @@ runs:
               REPO_URL="https://download.opensuse.org/repositories/devel:/sap:/trento:/factory/SLES16.0/devel:sap:trento:factory.repo"
             else
               REPO_URL="https://download.opensuse.org/repositories/devel:sap:trento:factory/SLES15-Trento-SP3-SP7/devel:sap:trento:factory.repo"
+              ANSIBLE_REPO_URL="https://download.opensuse.org/repositories/devel:sap:trento:factory/SLES15-SP5/devel:sap:trento:factory.repo"
             fi
 
             sudo zypper --non-interactive addrepo $REPO_URL 2>/dev/null || true
             sudo zypper --non-interactive modifyrepo --priority 1 devel_sap_trento_factory
+            if [ "$SLES_MAJOR_VERSION" != "16" ]; then
+              sudo zypper --non-interactive addrepo $ANSIBLE_REPO_URL devel_sap_trento_factory_ansible 2>/dev/null || true
+              sudo zypper --non-interactive modifyrepo --priority 1 devel_sap_trento_factory_ansible
+            fi
             sudo zypper --non-interactive --gpg-auto-import-keys refresh
             
             if [[ "$HOSTNAME" != target* ]]; then
