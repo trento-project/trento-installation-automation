@@ -101,6 +101,7 @@ runs:
                 vars:
                   ${PYTHON_INTERPRETER_LINE}
                   provision_prometheus: true
+                  prometheus_enable_remote_write_receiver: false
                   provision_proxy: true
                   trento_prometheus_port: 9095
                   trento_prometheus_auth: "none"
