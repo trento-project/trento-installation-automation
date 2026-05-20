@@ -191,6 +191,13 @@ jobs:
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
 
+      - name: Verify Trento supportconfig plugin on target nodes
+        uses: ./.github/actions/verify-trento-supportutils-plugin
+        with:
+          target_hosts_fqdn_csv: ${{ join(fromJson(steps.get-hosts.outputs.target_hosts_json), ',') }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+
   test:
     name: Run Cypress tests (${{ matrix.target_host }})
     needs: provision-and-deploy
