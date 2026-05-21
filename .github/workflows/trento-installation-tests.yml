@@ -192,11 +192,27 @@ jobs:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
 
       - name: Verify Trento supportconfig plugin on target nodes
-        uses: ./.github/actions/verify-trento-supportutils-plugin
+        uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0 # v1.2.4
         with:
-          target_hosts_fqdn_csv: ${{ join(fromJson(steps.get-hosts.outputs.target_hosts_json), ',') }}
-          ssh_username: ${{ env.SSH_USERNAME }}
-          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          host: ${{ join(fromJson(steps.get-hosts.outputs.target_hosts_json), ',') }}
+          username: ${{ env.SSH_USERNAME }}
+          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+
+            NODE_NAME="$(hostname -s)"
+
+            sudo rpm -q supportutils-plugin-trento supportutils > /dev/null
+
+            OUTPUT_FILE="$(mktemp)"
+            trap 'rm -f "$OUTPUT_FILE"' EXIT
+            sudo supportconfig > "$OUTPUT_FILE"
+
+            if ! grep -Eq "Plugin: trento\.\.\.\s+Done" "$OUTPUT_FILE"; then
+              echo "ERROR: Trento supportconfig plugin not found/executed on ${NODE_NAME}" >&2
+              exit 1
+            fi
 
   test:
     name: Run Cypress tests (${{ matrix.target_host }})
