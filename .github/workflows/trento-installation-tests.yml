@@ -232,6 +232,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Get photofinish path
+        id: photofinish-path
+        run: |
+          set -euo pipefail
+          photofinish_path="$(command -v photofinish)"
+          echo "path=$photofinish_path" >> "$GITHUB_OUTPUT"
+
       - name: Install web assets dependencies
         run: cd trento-web/assets && npm ci
 
@@ -244,16 +251,14 @@ jobs:
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
       - name: Cypress run
-        uses: cypress-io/github-action@f790eee7a50d9505912f50c2095510be7de06aa7 # v6
+        uses: cypress-io/github-action@dace029018fcdf86e0df89a31bc3cfa5b32570d8 # v7.3.0
         env:
           cypress_video: false
-          cypress_photofinish_binary: $(whereis photofinish | cut -d" " -f2)
-          cypress_wanda_mode: 'prod'
-          cypress_web_mode: 'prod'
         with:
           working-directory: trento-web/test/e2e
           wait-on-timeout: 30
           config: baseUrl=https://${{ matrix.target_host }},retries=2
+          expose: photofinish_binary=${{ steps.photofinish-path.outputs.path }},wanda_mode=prod,web_mode=prod
 
       - name: Upload cypress test screenshots
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
