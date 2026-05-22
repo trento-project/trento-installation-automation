@@ -180,6 +180,32 @@ jobs:
           ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
+      - name: Trust test CA certificate on target hosts
+        uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0 # v1.2.4
+        with:
+          host: ${{ join(fromJson(steps.get-hosts.outputs.target_hosts_json), ',') }}
+          username: ${{ env.SSH_USERNAME }}
+          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+            CA_CERT_PATH="/etc/pki/trust/anchors/trento-ca.crt"
+            NGINX_CERT_PATH="/etc/ssl/certs/trento.crt"
+            PRESERVED_CERT_DIR="/etc/trento/certs"
+            PRESERVED_CERT_PATH="${PRESERVED_CERT_DIR}/trento.crt"
+
+            sudo install -d -m 0755 /etc/pki/trust/anchors "$PRESERVED_CERT_DIR"
+
+            if sudo test -f "$NGINX_CERT_PATH" && ! sudo test -L "$NGINX_CERT_PATH"; then
+              sudo mv -f "$NGINX_CERT_PATH" "$PRESERVED_CERT_PATH"
+              sudo ln -sfn "$PRESERVED_CERT_PATH" "$NGINX_CERT_PATH"
+            fi
+
+            sudo tee "$CA_CERT_PATH" > /dev/null <<'EOF_CA_CRT'
+            ${{ vars.TRENTO_TEST_CA_CRT }}
+            EOF_CA_CRT
+            sudo update-ca-certificates
+
       - name: Trust test CA certificate
         run: |
           sudo mkdir -p /usr/local/share/ca-certificates/
