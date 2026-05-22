@@ -198,13 +198,16 @@ jobs:
 
             if sudo test -f "$NGINX_CERT_PATH" && ! sudo test -L "$NGINX_CERT_PATH"; then
               sudo mv -f "$NGINX_CERT_PATH" "$PRESERVED_CERT_PATH"
-              sudo ln -sfn "$PRESERVED_CERT_PATH" "$NGINX_CERT_PATH"
             fi
 
             sudo tee "$CA_CERT_PATH" > /dev/null <<'EOF_CA_CRT'
             ${{ vars.TRENTO_TEST_CA_CRT }}
             EOF_CA_CRT
             sudo update-ca-certificates
+
+            if sudo test -f "$PRESERVED_CERT_PATH"; then
+              sudo ln -sfn "$PRESERVED_CERT_PATH" "$NGINX_CERT_PATH"
+            fi
 
       - name: Trust test CA certificate
         run: |
