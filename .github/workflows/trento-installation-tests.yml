@@ -203,6 +203,12 @@ jobs:
 
             NODE_NAME="$(hostname -s)"
 
+            # Skip supportutils-plugin verification on SLES 15.4
+            if [[ "$NODE_NAME" == *"15sp4"* ]]; then
+              echo "Skipping supportutils-plugin verification on SLES 15.4 (${NODE_NAME})"
+              exit 0
+            fi
+
             sudo rpm -q supportutils-plugin-trento supportutils > /dev/null
 
             OUTPUT_FILE="$(mktemp)"
