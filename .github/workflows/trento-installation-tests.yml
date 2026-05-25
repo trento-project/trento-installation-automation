@@ -10,6 +10,10 @@ on:
         description: 'Install rolling version of packages'
         type: boolean
         default: false
+      run_cypress:
+        description: 'Run Cypress test suite'
+        type: boolean
+        default: true
 
 concurrency:
   group: trento-installation-tests
@@ -252,6 +256,7 @@ jobs:
   test:
     name: Run Cypress tests (${{ matrix.target_host }})
     needs: provision-and-deploy
+    if: ${{ inputs.run_cypress }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
