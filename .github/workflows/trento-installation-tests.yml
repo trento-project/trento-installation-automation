@@ -261,7 +261,7 @@ jobs:
           expose: photofinish_binary=${{ steps.photofinish-path.outputs.path }},wanda_mode=prod,web_mode=prod
 
       - name: Upload cypress test screenshots
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: e2e-screenshots-${{ matrix.target_host }}
