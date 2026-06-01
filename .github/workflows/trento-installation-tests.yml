@@ -158,6 +158,7 @@ jobs:
       - name: Setup test CA
         id: setup-test-ca
         uses: ./.github/actions/setup-test-ca
+        timeout-minutes: 1
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
           ssh_username: ${{ env.SSH_USERNAME }}
@@ -192,7 +193,7 @@ jobs:
           host: ${{ join(fromJson(steps.get-hosts.outputs.target_hosts_json), ',') }}
           username: ${{ env.SSH_USERNAME }}
           key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          command_timeout: 30m
+          command_timeout: 5m
           script: |
             set -euo pipefail
 

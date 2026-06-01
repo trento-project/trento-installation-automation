@@ -81,7 +81,6 @@ runs:
         host: ${{ inputs.hosts_fqdn_csv }}
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
-        command_timeout: 10m
         script: |
           set -euo pipefail
 
