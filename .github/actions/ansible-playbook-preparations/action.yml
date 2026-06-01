@@ -101,6 +101,7 @@ runs:
                 vars:
                   ${PYTHON_INTERPRETER_LINE}
                   provision_prometheus: true
+                  prometheus_enable_remote_write_receiver: false
                   provision_proxy: true
                   trento_prometheus_port: 9095
                   trento_prometheus_auth: "none"
@@ -108,6 +109,10 @@ runs:
                   wanda_postgres_password: "postgres"
                   rabbitmq_password: "admin"
                   web_admin_password: "$WEB_ADMIN_PASSWORD"
+                  supportutils_enabled: true
+                  supportutils_package_name: "supportutils"
+                  supportutils_plugin_package_name: "supportutils-plugin-trento"
+                  supportutils_update_cache: true
                   trento_web_listen_port: 4000
                   trento_wanda_listen_port: 4001
                   trento_server_name: "{{ inventory_hostname }}"

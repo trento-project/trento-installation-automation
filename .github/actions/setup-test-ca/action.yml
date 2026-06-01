@@ -1,5 +1,5 @@
 name: 'Setup Test CA'
-description: 'Load the test certificate authority and distribute it to control nodes'
+description: 'Load the test certificate authority and distribute it to all hosts'
 
 inputs:
   hosts_fqdn_csv:
@@ -7,6 +7,9 @@ inputs:
     required: true
   ssh_username:
     description: 'SSH username'
+    required: true
+  ssh_private_key:
+    description: 'SSH private key content'
     required: true
   ca_cert:
     description: 'Certificate for the test certificate authority'
@@ -44,16 +47,54 @@ runs:
         openssl rsa -in "$CERTS_DIR/ca.key" -check -noout > /dev/null
         echo "ca_cert_path=$CERTS_DIR/ca.crt" >> "$GITHUB_OUTPUT"
 
-    - name: Distribute CA to control nodes
+    - name: Distribute CA to all hosts
       shell: bash
       run: |
         set -euo pipefail
         CERTS_DIR="${RUNNER_TEMP}/trento-test-ca"
         IFS=',' read -ra HOSTS <<< "${{ inputs.hosts_fqdn_csv }}"
         for host in "${HOSTS[@]}"; do
+          echo "Distributing CA to $host..."
+          ssh -o StrictHostKeyChecking=no ${{ inputs.ssh_username }}@$host "mkdir -p ~/.ssl"
           if [[ "$host" == control* ]]; then
-            echo "Distributing CA to $host..."
-            ssh -o StrictHostKeyChecking=no ${{ inputs.ssh_username }}@$host "mkdir -p ~/.ssl"
+            # Control nodes need both cert and key for certificate generation
             scp -o StrictHostKeyChecking=no "$CERTS_DIR/ca.key" "$CERTS_DIR/ca.crt" ${{ inputs.ssh_username }}@$host:~/.ssl/
+          else
+            # Target nodes only need the certificate for trust
+            scp -o StrictHostKeyChecking=no "$CERTS_DIR/ca.crt" ${{ inputs.ssh_username }}@$host:~/.ssl/
           fi
         done
+
+    - name: Trust CA certificate on runner
+      shell: bash
+      run: |
+        set -euo pipefail
+        CERTS_DIR="${RUNNER_TEMP}/trento-test-ca"
+        sudo mkdir -p /usr/local/share/ca-certificates/
+        sudo cp "$CERTS_DIR/ca.crt" /usr/local/share/ca-certificates/trento-ca.crt
+        sudo update-ca-certificates
+        echo "CA certificate trusted on runner"
+
+    - name: Import CA certificate to system trust store on target hosts
+      uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0 # v1.2.4
+      with:
+        host: ${{ inputs.hosts_fqdn_csv }}
+        username: ${{ inputs.ssh_username }}
+        key: ${{ inputs.ssh_private_key }}
+        script: |
+          set -euo pipefail
+
+          CURRENT_HOSTNAME=$(hostname -s)
+
+          # Only import on target nodes, not control nodes
+          if [[ "$CURRENT_HOSTNAME" == control* ]]; then
+            echo "Skipping CA import on control node: $CURRENT_HOSTNAME"
+            exit 0
+          fi
+
+          # Import CA certificate to system trust store
+          sudo mkdir -p /usr/share/pki/trust/anchors
+          sudo cp ~/.ssl/ca.crt /usr/share/pki/trust/anchors/trento-ca.crt
+          sudo update-ca-certificates
+
+          echo "CA certificate imported to system trust store on $(hostname)"

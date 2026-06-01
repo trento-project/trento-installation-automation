@@ -158,9 +158,11 @@ jobs:
       - name: Setup test CA
         id: setup-test-ca
         uses: ./.github/actions/setup-test-ca
+        timeout-minutes: 1
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
           ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           ca_cert: ${{ vars.TRENTO_TEST_CA_CRT }}
           ca_key: ${{ secrets.TRENTO_TEST_CA_KEY }}
 
@@ -180,16 +182,33 @@ jobs:
           ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
-      - name: Trust test CA certificate
-        run: |
-          sudo mkdir -p /usr/local/share/ca-certificates/
-          sudo cp "${{ steps.setup-test-ca.outputs.ca_cert_path }}" /usr/local/share/ca-certificates/trento-ca.crt
-          sudo update-ca-certificates
-
       - name: Verify Trento instances healthcheck endpoints
         uses: ./.github/actions/verify-trento-health
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
+
+      - name: Verify Trento supportconfig plugin on target nodes
+        uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0 # v1.2.4
+        with:
+          host: ${{ join(fromJson(steps.get-hosts.outputs.target_hosts_json), ',') }}
+          username: ${{ env.SSH_USERNAME }}
+          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+
+            NODE_NAME="$(hostname -s)"
+
+            sudo rpm -q supportutils-plugin-trento supportutils > /dev/null
+
+            OUTPUT_FILE="$(mktemp)"
+            trap 'rm -f "$OUTPUT_FILE"' EXIT
+            sudo supportconfig > "$OUTPUT_FILE"
+
+            if ! grep -Eq "Plugin: trento\.\.\.\s+Done" "$OUTPUT_FILE"; then
+              echo "ERROR: Trento supportconfig plugin not found/executed on ${NODE_NAME}" >&2
+              exit 1
+            fi
 
   test:
     name: Run Cypress tests (${{ matrix.target_host }})
