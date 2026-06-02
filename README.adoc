@@ -123,16 +123,11 @@ NOTE: When `install_rolling` is disabled, packages available in Azure Blob Stora
 | `PUBLIC_SSH_KEY_CONTENT`
 | SSH public key for VM access
 
-| `SUPPORTED_OS_VERSIONS`
-| Newline-separated list of SLES versions to test (see below)
-
 | `TRENTO_TEST_CA_CRT`
 | Public certificate of the test certificate authority used to sign Trento HTTPS certificates
 |===
 
-=== Supported OS Versions Configuration
-
-The `SUPPORTED_OS_VERSIONS` variable defines which SLES versions to provision VMs for:
+=== Supported OS Versions
 
 ----
 15.4
@@ -144,16 +139,20 @@ The `SUPPORTED_OS_VERSIONS` variable defines which SLES versions to provision VM
 
 Each entry creates a control and target VM pair for that SLES version. The format is `+{major}.{sp}+`, for example `15.6` for SLES 15 SP6 and `16.0` for SLES 16.
 
+The manual workflows expose one boolean input per supported version so you can choose the target OS versions directly when launching the workflow.
+
 == Usage
 
 === Running Tests
 
 . Go to **Actions** > **Trento Installation Tests**
 . Click **Run workflow**
+. Select the SLES versions you want to deploy to
 . Optionally enable `install_rolling` to install packages from the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS] instead of Azure Blob Storage
+. Optionally enable `skip_cypress` to stop after deployment and health verification
 . Click **Run workflow**
 
-The workflow always recreates the Terraform-managed infrastructure before installing Trento. After installation, Cypress end-to-end tests run against each target node. If Cypress fails, screenshots are uploaded as workflow artifacts.
+The workflow always recreates the Terraform-managed infrastructure before installing Trento. After installation, Cypress end-to-end tests run against each target node unless `skip_cypress` is enabled. If Cypress fails, screenshots are uploaded as workflow artifacts.
 
 === Cleanup
 

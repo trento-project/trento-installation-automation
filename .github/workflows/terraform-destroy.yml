@@ -26,7 +26,12 @@ jobs:
       - name: Generate machines config CSV
         uses: ./.github/actions/generate-machines-config
         with:
-          os_versions: ${{ vars.SUPPORTED_OS_VERSIONS }}
+          os_versions: |
+            15.4
+            15.5
+            15.6
+            15.7
+            16.0
 
       - name: Azure Login
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2

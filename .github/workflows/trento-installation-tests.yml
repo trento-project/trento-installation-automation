@@ -6,8 +6,32 @@ name: Trento Installation Tests
 on:
   workflow_dispatch:
     inputs:
+      sles_15_sp4:
+        description: 'Deploy to SLES 15 SP4'
+        type: boolean
+        default: true
+      sles_15_sp5:
+        description: 'Deploy to SLES 15 SP5'
+        type: boolean
+        default: true
+      sles_15_sp6:
+        description: 'Deploy to SLES 15 SP6'
+        type: boolean
+        default: true
+      sles_15_sp7:
+        description: 'Deploy to SLES 15 SP7'
+        type: boolean
+        default: true
+      sles_16_0:
+        description: 'Deploy to SLES 16'
+        type: boolean
+        default: true
       install_rolling:
         description: 'Install rolling version of packages'
+        type: boolean
+        default: false
+      skip_cypress:
+        description: 'Skip the Cypress end-to-end tests'
         type: boolean
         default: false
 
@@ -33,10 +57,42 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+      - name: Select OS versions
+        id: select-os-versions
+        run: |
+          selected_versions=()
+
+          if [[ "${{ inputs.sles_15_sp4 }}" == 'true' ]]; then
+            selected_versions+=("15.4")
+          fi
+          if [[ "${{ inputs.sles_15_sp5 }}" == 'true' ]]; then
+            selected_versions+=("15.5")
+          fi
+          if [[ "${{ inputs.sles_15_sp6 }}" == 'true' ]]; then
+            selected_versions+=("15.6")
+          fi
+          if [[ "${{ inputs.sles_15_sp7 }}" == 'true' ]]; then
+            selected_versions+=("15.7")
+          fi
+          if [[ "${{ inputs.sles_16_0 }}" == 'true' ]]; then
+            selected_versions+=("16.0")
+          fi
+
+          if [ ${#selected_versions[@]} -eq 0 ]; then
+            echo "Error: Select at least one supported SLES version." >&2
+            exit 1
+          fi
+
+          {
+            echo "os_versions<<EOF"
+            printf '%s\n' "${selected_versions[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Generate machines config CSV
         uses: ./.github/actions/generate-machines-config
         with:
-          os_versions: ${{ vars.SUPPORTED_OS_VERSIONS }}
+          os_versions: ${{ steps.select-os-versions.outputs.os_versions }}
 
       - name: Setup SSH keys
         run: |
@@ -213,11 +269,12 @@ jobs:
   test:
     name: Run Cypress tests (${{ matrix.target_host }})
     needs: provision-and-deploy
+    if: ${{ needs.provision-and-deploy.result == 'success' && !inputs.skip_cypress }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        target_host: ${{ fromJson(needs.provision-and-deploy.outputs.target_hosts_json) }}
+        target_host: ${{ fromJson(needs.provision-and-deploy.outputs.target_hosts_json || '[]') }}
 
     steps:
       - name: Checkout repository
