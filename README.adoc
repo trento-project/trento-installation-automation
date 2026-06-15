@@ -154,6 +154,10 @@ The manual workflows expose one boolean input per supported version so you can c
 
 The workflow always recreates the Terraform-managed infrastructure before installing Trento. After installation, Cypress end-to-end tests run against each target node unless `skip_cypress` is enabled. If Cypress fails, screenshots are uploaded as workflow artifacts.
 
+=== Continuous Integration
+
+The **Continuous Integration** workflow runs on pushes to `main`, pull request open/update events, and manual dispatches. It calls the reusable installation base workflow with only SLES 15 SP7 enabled, installs packages from the Trento rolling repository, runs only one Cypress spec, and destroys the Terraform-managed infrastructure after completion.
+
 === Cleanup
 
 To destroy all provisioned infrastructure:
