@@ -360,6 +360,4 @@ jobs:
       - test
     if: ${{ always() && inputs.destroy_after }}
     uses: ./.github/workflows/terraform-destroy.yml
-    with:
-      os_versions: ${{ needs.provision-and-deploy.outputs.os_versions }}
     secrets: inherit
