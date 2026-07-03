@@ -17,11 +17,10 @@ concurrency:
 
 jobs:
   ci:
-    name: Run smoke deployment & test
+    name: Run deployments & tests
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     uses: ./.github/workflows/trento-installation-base.yml
     with:
-      sles_15_sp7: true
       install_rolling: true
       cypress_spec: '**/about.cy.js'
       destroy_after: true
