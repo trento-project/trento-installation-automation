@@ -6,6 +6,7 @@ name: Azure Cleanup
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 env:
   AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
