@@ -23,7 +23,7 @@ on:
         type: boolean
         default: true
       sles_16_0:
-        description: 'Deploy to SLES 16'
+        description: 'Deploy to SLES 16.0'
         type: boolean
         default: true
       install_rolling:
@@ -51,6 +51,7 @@ env:
   AZURE_BLOB_STORAGE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_CONTAINER }}
   AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
   SSH_USERNAME: cloudadmin
+  PHOTOFINISH_VERSION: v1.4.2
 
 jobs:
   provision-and-deploy:
@@ -310,7 +311,7 @@ jobs:
         uses: jaxxstorm/action-install-gh-release@6096f2a2bbfee498ced520b6922ac2c06e990ed2 # v2.1.0
         with:
           repo: trento-project/photofinish
-          tag: v1.4.2
+          tag: ${{ env.PHOTOFINISH_VERSION }}
           cache: enable
           chmod: 0755
         env:
