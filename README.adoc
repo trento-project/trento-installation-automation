@@ -156,14 +156,16 @@ The workflow always recreates the Terraform-managed infrastructure before instal
 
 === Continuous Integration
 
-The **Continuous Integration** workflow runs on pushes to `main`, pull request open/update events, and manual dispatches. It calls the reusable installation base workflow with only SLES 15 SP7 enabled, installs packages from the Trento rolling repository, runs only one Cypress spec, and destroys the Terraform-managed infrastructure after completion.
+The **Continuous Integration** workflow runs on pushes to `main`, pull request open/update events, and manual dispatches. It calls the reusable installation base workflow with all supported SLES versions enabled, installs packages from the Trento rolling repository, runs only the `+**/about.cy.js+` Cypress spec against every target node, and destroys the Terraform-managed infrastructure after completion.
 
 === Cleanup
 
 To destroy all provisioned infrastructure:
 
-. Go to **Actions** > **Terraform Destroy**
+. Go to **Actions** > **Azure Cleanup**
 . Click **Run workflow**
+
+The cleanup workflow always generates the full machine configuration for every supported SLES version before running `terraform destroy`, so manual cleanup and CI cleanup both target all Terraform-managed infrastructure by default.
 
 == Supported SLES Versions
 
