@@ -293,6 +293,8 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: trento-project/web
+          # TEMPORARY: pinned to a testing branch, revert to the default branch before merging.
+          ref: fixes-test-suite-prod-target
           path: trento-web
 
       - name: Trust test CA certificate

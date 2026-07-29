@@ -34,6 +34,10 @@ on:
         description: 'Skip the Cypress end-to-end tests'
         type: boolean
         default: false
+      cypress_spec:
+        description: 'Cypress spec pattern to run (e.g. **/hana_cluster_details.cy.js). Leave empty to run the full suite.'
+        type: string
+        default: ''
 
 jobs:
   installation-tests:
@@ -47,4 +51,5 @@ jobs:
       sles_16_0: ${{ inputs.sles_16_0 }}
       install_rolling: ${{ inputs.install_rolling }}
       skip_cypress: ${{ inputs.skip_cypress }}
+      cypress_spec: ${{ inputs.cypress_spec }}
     secrets: inherit
