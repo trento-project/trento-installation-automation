@@ -1,5 +1,5 @@
 name: 'Stop Trento agent'
-description: 'Stop trento-agent on a target host'
+description: 'Stop trento-agent on a target host and deregister its leftover host from Trento'
 
 inputs:
   target_host_fqdn:
@@ -10,6 +10,13 @@ inputs:
     required: true
   ssh_private_key:
     description: 'SSH private key content'
+    required: true
+  web_admin_user:
+    description: 'Trento web admin username used to deregister leftover hosts'
+    required: false
+    default: 'admin'
+  web_admin_password:
+    description: 'Trento web admin password used to deregister leftover hosts'
     required: true
 
 runs:
@@ -29,3 +36,33 @@ runs:
           fi
 
           sudo systemctl stop trento-agent
+
+    # The real agent registered this machine as a host. After stopping the
+    # agent we deregister it so the Cypress suite starts from a clean state
+    # (the suite injects its own hosts via photofinish). Mirrors the previous
+    # apiDeregisterProdHost logic that lived in the Cypress page objects.
+    - name: Deregister leftover host from Trento
+      shell: bash
+      env:
+        WEB_URL: https://${{ inputs.target_host_fqdn }}
+        ADMIN_USER: ${{ inputs.web_admin_user }}
+        ADMIN_PASSWORD: ${{ inputs.web_admin_password }}
+      run: |
+        set -euo pipefail
+
+        access_token=$(curl -sSf -X POST "$WEB_URL/api/session" \
+          -H 'Content-Type: application/json' \
+          -d "{\"username\":\"${ADMIN_USER}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
+          | jq -r '.access_token')
+
+        host_id=$(curl -sSf "$WEB_URL/api/v1/hosts" \
+          -H "Authorization: Bearer ${access_token}" | jq -r '.[0].id // empty')
+
+        if [[ -z "$host_id" ]]; then
+          echo "No registered hosts to deregister"
+          exit 0
+        fi
+
+        echo "Deregistering host ${host_id}"
+        curl -sSf -X DELETE "$WEB_URL/api/v1/hosts/${host_id}" \
+          -H "Authorization: Bearer ${access_token}"
