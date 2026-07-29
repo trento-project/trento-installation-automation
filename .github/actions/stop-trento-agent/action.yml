@@ -39,8 +39,9 @@ runs:
 
     # The real agent registered this machine as a host. After stopping the
     # agent we deregister it so the Cypress suite starts from a clean state
-    # (the suite injects its own hosts via photofinish). Mirrors the previous
-    # apiDeregisterProdHost logic that lived in the Cypress page objects.
+    # (the suite injects its own hosts via photofinish). The DELETE returns
+    # 422 until the host stops being "alive" (its heartbeat lapses), so we
+    # poll until it becomes deregisterable.
     - name: Deregister leftover host from Trento
       shell: bash
       env:
@@ -64,5 +65,19 @@ runs:
         fi
 
         echo "Deregistering host ${host_id}"
-        curl -sSf -X DELETE "$WEB_URL/api/v1/hosts/${host_id}" \
-          -H "Authorization: Bearer ${access_token}"
+        for attempt in $(seq 1 20); do
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+            "$WEB_URL/api/v1/hosts/${host_id}" \
+            -H "Authorization: Bearer ${access_token}")
+          # 204: deregistered. 404: already gone. Both are terminal successes.
+          if [[ "$status" == "204" || "$status" == "404" ]]; then
+            echo "Host ${host_id} deregistered (HTTP ${status})"
+            exit 0
+          fi
+          # 422: host still considered alive (heartbeat not yet lapsed); retry.
+          echo "Attempt ${attempt}/20: deregister returned HTTP ${status}, waiting for heartbeat to lapse..."
+          sleep 10
+        done
+
+        echo "Failed to deregister host ${host_id}: still not deregisterable after retries" >&2
+        exit 1
