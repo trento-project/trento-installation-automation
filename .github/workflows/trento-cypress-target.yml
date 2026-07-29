@@ -39,7 +39,7 @@ jobs:
     # Fallbacks apply on push events, where the workflow_dispatch inputs are absent.
     env:
       TARGET_HOST: ${{ inputs.target_host || 'target16sp0.westeurope.cloudapp.azure.com' }}
-      CYPRESS_SPEC: ${{ inputs.cypress_spec || '**/sap_system_details' }}
+      CYPRESS_SPEC: ${{ inputs.cypress_spec || '**/sap_system_details.cy.js' }}
 
     steps:
       - name: Checkout repository
