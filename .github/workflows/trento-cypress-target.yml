@@ -1,0 +1,113 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
+# TEMPORARY workflow: runs the Cypress e2e suite directly against an already
+# provisioned & deployed Trento host, skipping the Azure provisioning/deploy
+# steps. Useful for iterating quickly on the test suite. Remove before merging.
+
+name: Trento Cypress against existing target
+
+on:
+  # TEMPORARY: run automatically on every push to the testing branch so it can be
+  # exercised without merging to the default branch. Remove before merging.
+  push:
+    branches:
+      - run-fixes-branch-from-web
+  workflow_dispatch:
+    inputs:
+      target_host:
+        description: 'FQDN of the already deployed Trento host to test against'
+        type: string
+        default: 'target16sp0.westeurope.cloudapp.azure.com'
+      cypress_spec:
+        description: 'Cypress spec pattern to run (e.g. **/hana_cluster_details.cy.js). Leave empty to run the full suite.'
+        type: string
+        default: '**/hana_cluster_details.cy.js'
+
+concurrency:
+  group: trento-installation-tests
+  cancel-in-progress: false
+
+env:
+  SSH_USERNAME: cloudadmin
+  PHOTOFINISH_VERSION: v1.4.2
+
+jobs:
+  test:
+    name: Run Cypress tests
+    runs-on: ubuntu-24.04
+    # Fallbacks apply on push events, where the workflow_dispatch inputs are absent.
+    env:
+      TARGET_HOST: ${{ inputs.target_host || 'target16sp0.westeurope.cloudapp.azure.com' }}
+      CYPRESS_SPEC: ${{ inputs.cypress_spec || '' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Checkout Trento Web tests
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: trento-project/web
+          # TEMPORARY: pinned to a testing branch, revert to the default branch before merging.
+          ref: fixes-test-suite-prod-target
+          path: trento-web
+
+      - name: Trust test CA certificate
+        run: |
+          set -euo pipefail
+          CA_CERT_FILE="/usr/local/share/ca-certificates/trento-ca.crt"
+          sudo mkdir -p /usr/local/share/ca-certificates/
+          sudo tee "$CA_CERT_FILE" > /dev/null <<'EOF_CA_CRT'
+          ${{ vars.TRENTO_TEST_CA_CRT }}
+          EOF_CA_CRT
+          openssl x509 -in "$CA_CERT_FILE" -noout > /dev/null
+          sudo update-ca-certificates
+          echo "NODE_EXTRA_CA_CERTS=$CA_CERT_FILE" >> "$GITHUB_ENV"
+
+      - name: Install photofinish
+        uses: jaxxstorm/action-install-gh-release@6096f2a2bbfee498ced520b6922ac2c06e990ed2 # v2.1.0
+        with:
+          repo: trento-project/photofinish
+          tag: ${{ env.PHOTOFINISH_VERSION }}
+          cache: enable
+          chmod: 0755
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get photofinish path
+        id: photofinish-path
+        run: |
+          set -euo pipefail
+          photofinish_path="$(command -v photofinish)"
+          echo "path=$photofinish_path" >> "$GITHUB_OUTPUT"
+
+      - name: Install web assets dependencies
+        run: cd trento-web/assets && npm ci
+
+      # The deployed host runs a real agent; stop it before Cypress generates photofinish data to avoid conflicts during tests execution.
+      - name: Stop Trento agent on target host
+        uses: ./.github/actions/stop-trento-agent
+        with:
+          target_host_fqdn: ${{ env.TARGET_HOST }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+
+      - name: Cypress run
+        uses: cypress-io/github-action@dace029018fcdf86e0df89a31bc3cfa5b32570d8 # v7.3.0
+        env:
+          cypress_video: false
+        with:
+          working-directory: trento-web/test/e2e
+          wait-on-timeout: 30
+          config: baseUrl=https://${{ env.TARGET_HOST }},retries=2
+          expose: photofinish_binary=${{ steps.photofinish-path.outputs.path }},wanda_mode=prod,web_mode=prod
+          spec: ${{ env.CYPRESS_SPEC }}
+
+      - name: Upload cypress test screenshots
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: e2e-screenshots-${{ env.TARGET_HOST }}
+          path: trento-web/test/e2e/cypress/screenshots/
+          retention-days: 1
