@@ -22,7 +22,7 @@ on:
       cypress_spec:
         description: 'Cypress spec pattern to run (e.g. **/hana_cluster_details.cy.js). Leave empty to run the full suite.'
         type: string
-        default: '**/hana_cluster_details.cy.js'
+        default: '**/hana_database_details.cy.js'
 
 concurrency:
   group: trento-installation-tests
