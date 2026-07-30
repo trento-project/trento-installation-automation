@@ -37,11 +37,6 @@ runs:
 
           sudo systemctl stop trento-agent
 
-    # The real agent registered this machine as a host. After stopping the
-    # agent we deregister it so the Cypress suite starts from a clean state
-    # (the suite injects its own hosts via photofinish). The DELETE returns
-    # 422 until the host stops being "alive" (its heartbeat lapses), so we
-    # poll until it becomes deregisterable.
     - name: Deregister leftover host from Trento
       shell: bash
       env:
@@ -79,5 +74,5 @@ runs:
           sleep 10
         done
 
-        echo "Failed to deregister host ${host_id}: still not deregisterable after retries" >&2
+        echo "Failed to deregister host ${host_id}: after retries" >&2
         exit 1
