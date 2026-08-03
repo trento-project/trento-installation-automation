@@ -204,7 +204,7 @@ The SSH key pair, the test certificate authority and the Trento admin password a
 
 === Continuous Integration
 
-The **Continuous Integration** workflow runs on pushes to `main`, pull request open/update events, and manual dispatches. It calls the reusable installation base workflow with all supported SLES versions enabled, installs packages from the Trento rolling repository, runs only the `+**/about.cy.js+` Cypress spec against every target node, and destroys the Terraform-managed infrastructure after completion.
+The **Continuous Integration** workflow runs on pushes to `main`, pull request open/update events, and manual dispatches. Changes that only touch `+**.adoc+` files or `LICENSE` do not trigger it, since they cannot affect a deployment. It calls the reusable installation base workflow with all supported SLES versions enabled, installs packages from the Trento rolling repository, runs only the `+**/about.cy.js+` Cypress spec against every target node, and destroys the Terraform-managed infrastructure after completion.
 
 === Cleanup
 
