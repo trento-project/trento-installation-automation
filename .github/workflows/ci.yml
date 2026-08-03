@@ -7,8 +7,14 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '**.adoc'
+      - 'LICENSE'
   pull_request:
     types: [opened, synchronize]
+    paths-ignore:
+      - '**.adoc'
+      - 'LICENSE'
   workflow_dispatch:
 
 concurrency:
