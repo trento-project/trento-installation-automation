@@ -1,4 +1,4 @@
-name: 'Stop Trento agent'
+name: 'Clean up Trento agent'
 description: 'Stop trento-agent on a target host and deregister its leftover host from Trento'
 
 inputs:
