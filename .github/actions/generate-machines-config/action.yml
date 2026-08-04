@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
 name: 'Generate Machines Config'
 description: 'Generate .machines.conf.csv from a newline-separated list of SLES versions'
 
