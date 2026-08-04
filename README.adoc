@@ -156,10 +156,10 @@ The manual workflows expose one boolean input per supported version so you can c
 
 The workflow always recreates the Terraform-managed infrastructure before installing Trento. After installation, Cypress end-to-end tests run against each target node unless `skip_cypress` is enabled. If Cypress fails, screenshots are uploaded as workflow artifacts.
 
-Two behaviours are worth knowing before launching a run:
+Two behaviors are worth knowing before launching a run:
 
 * Manually dispatched runs do **not** destroy the infrastructure when they finish, so the deployed environments stay available for manual inspection. Destroy them with the *Azure Cleanup* workflow once you are done.
-* All runs share the `trento-installation-tests` concurrency group and are never cancelled, so a run started while another one is in progress waits in the queue instead of starting immediately.
+* All runs share the `trento-installation-tests` concurrency group and are never canceled, so a run started while another one is in progress waits in the queue instead of starting immediately.
 
 === Choosing which packages to test
 
