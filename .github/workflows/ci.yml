@@ -7,13 +7,21 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '**.adoc'
+      - 'LICENSE'
   pull_request:
     types: [opened, synchronize]
+    paths-ignore:
+      - '**.adoc'
+      - 'LICENSE'
   workflow_dispatch:
 
+# Superseded runs are queued instead of canceled: canceling mid `terraform apply` leaves
+# an orphaned state lock and resources that the state file never recorded.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   ci:

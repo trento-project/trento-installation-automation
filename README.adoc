@@ -31,6 +31,8 @@ Example: `control15sp6` and `target15sp6` for SLES 15 SP6.
 
 === Azure Blob Storage Structure
 
+The RPMs under validation are only reachable from the internal network, so they are downloaded and uploaded to Azure Blob Storage manually, over VPN. There is no automated upload step: the workflow assumes the container is already in the desired state when it starts.
+
 RPMs must be uploaded to Azure Blob Storage with the following structure:
 
 ----
@@ -61,7 +63,7 @@ Each version directory should contain:
 * `trento-agent-*.rpm` - Trento agent
 * `ansible-trento-*.rpm` - Ansible collection for Trento installation
 
-NOTE: When `install_rolling` is disabled, packages available in Azure Blob Storage are configured with the highest repository priority. If a package is not provided in blob storage, it will be installed from the official SUSE release sources instead. This is useful when you want to test only a specific package (e.g., Ansible) while installing the rest from official SUSE release sources, or vice versa. When `install_rolling` is enabled, the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS] is configured with the highest repository priority and Azure Blob Storage is skipped.
+NOTE: When `install_rolling` is disabled, packages available in Azure Blob Storage are configured with the highest repository priority, and any package missing from it is installed from the official SUSE release sources instead. See <<Choosing which packages to test>> for how to use this to validate a partial release. When `install_rolling` is enabled, the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS] is configured with the highest repository priority and Azure Blob Storage is skipped.
 
 === GitHub Configuration
 
@@ -154,9 +156,55 @@ The manual workflows expose one boolean input per supported version so you can c
 
 The workflow always recreates the Terraform-managed infrastructure before installing Trento. After installation, Cypress end-to-end tests run against each target node unless `skip_cypress` is enabled. If Cypress fails, screenshots are uploaded as workflow artifacts.
 
+Two behaviors are worth knowing before launching a run:
+
+* Manually dispatched runs do **not** destroy the infrastructure when they finish, so the deployed environments stay available for manual inspection. Destroy them with the *Azure Cleanup* workflow once you are done.
+* All runs share the `trento-installation-tests` concurrency group and are never canceled, so a run started while another one is in progress waits in the queue instead of starting immediately.
+
+=== Choosing which packages to test
+
+Packages present in Azure Blob Storage are installed with the highest repository priority, and every package missing from it is installed from the official SUSE release sources. This is what makes it possible to validate a partial release, for example a release candidate where only `trento-web` is published.
+
+The storage account and container to upload to are configured in the `AZURE_BLOB_STORAGE` and `AZURE_BLOB_STORAGE_CONTAINER` repository variables.
+
+Before launching the workflow, connect to the VPN and, for each SLES version you plan to deploy to, perform the following steps:
+
+. Delete the RPMs left in `<container>/<sles_major_version>/<sp_version>/` by previous runs.
+. Upload only the RPMs under validation.
+
+IMPORTANT: Deleting the leftover RPMs is mandatory. The blob-backed repository is configured with priority 1, which `zypper` prefers over the official repositories even if they offer a newer version. An RPM left over from a previous run is repeatedly installed until it is removed from the container.
+
+For example, to validate a `trento-web` release candidate on SLES 15 SP6, leave only `trento-web-*.rpm` in the `15/6/` directory. The remaining packages, `trento-wanda`, `trento-checks`, `trento-agent` and `ansible-trento`, are then installed from the official SUSE release sources.
+
+Packages are split between the two node types:
+
+* **Target nodes** get every RPM except `ansible-trento-*.rpm` served from a local repository built from the container contents.
+* **Control nodes** get only `ansible-trento-*.rpm` installed directly from the downloaded file. When the container provides no `ansible-trento` RPM, the package is installed from the official SUSE release sources.
+
+If the version directory is missing or contains no RPMs, every package is installed from the official SUSE release sources. Enabling `install_rolling` ignores Azure Blob Storage entirely and installs everything from the Trento rolling repository.
+
+==== SLES 15 SP4 and the Ansible collection
+
+`ansible-trento` is not officially released for SLES 15 SP4, so release candidate artifacts never include an SP4 build of it. Trento can still be installed on an SP4 target, because the SP4 control node does not use the distribution Ansible. Instead, it creates a Python virtual environment and installs `ansible` 9 with `pip`, and configures it to use the collection provided by the RPM. The collection therefore works regardless of which service pack it was built for.
+
+When preparing a run that includes SP4, upload the SP5 `ansible-trento` release candidate to the `15/4/` directory alongside the rest of the SP4 packages.
+
+NOTE: This workaround only exists while SLES 15 SP4 is supported, and can be removed once support ends at the end of 2026.
+
+=== Accessing the deployed environments
+
+Because manually dispatched runs leave the infrastructure in place, each target node stays reachable for manual validation at `+https://target<sles_version>sp<sp_version>.<azure_region>.cloudapp.azure.com/+`, where `<azure_region>` is the location of `AZURE_RESOURCE_GROUP`. For example, https://target15sp7.westeurope.cloudapp.azure.com/ for SLES 15 SP7. Control nodes follow the same pattern with the `control` prefix.
+
+You can access the deployments using the following methods:
+
+* **Browser**: Import `TRENTO_TEST_CA_CRT` into your browser or system trust store, otherwise the HTTPS certificate is rejected. Log in with the `admin` user and the password stored in `WEB_ADMIN_PASSWORD`.
+* **SSH**: Connect as `cloudadmin` with the private key matching `PUBLIC_SSH_KEY_CONTENT`.
+
+The SSH key pair, the test certificate authority and the Trento admin password are all available in the team's password vault.
+
 === Continuous Integration
 
-The **Continuous Integration** workflow runs on pushes to `main`, pull request open/update events, and manual dispatches. It calls the reusable installation base workflow with all supported SLES versions enabled, installs packages from the Trento rolling repository, runs only the `+**/about.cy.js+` Cypress spec against every target node, and destroys the Terraform-managed infrastructure after completion.
+The **Continuous Integration** workflow runs on pushes to `main`, pull request open/update events, and manual dispatches. Changes that only touch `+**.adoc+` files or `LICENSE` do not trigger it, since they cannot affect a deployment. It calls the reusable installation base workflow with all supported SLES versions enabled, installs packages from the Trento rolling repository, runs only the `+**/about.cy.js+` Cypress spec against every target node, and destroys the Terraform-managed infrastructure after completion.
 
 === Cleanup
 
