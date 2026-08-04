@@ -1,180 +1,50 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
 name: Trento Installation Tests
 
 on:
   workflow_dispatch:
     inputs:
-      destroy_after:
-        description: 'Destroy infrastructure after tests'
+      sles_15_sp4:
+        description: 'Deploy to SLES 15 SP4'
+        type: boolean
+        default: true
+      sles_15_sp5:
+        description: 'Deploy to SLES 15 SP5'
+        type: boolean
+        default: true
+      sles_15_sp6:
+        description: 'Deploy to SLES 15 SP6'
+        type: boolean
+        default: true
+      sles_15_sp7:
+        description: 'Deploy to SLES 15 SP7'
+        type: boolean
+        default: true
+      sles_16_0:
+        description: 'Deploy to SLES 16'
+        type: boolean
+        default: true
+      install_rolling:
+        description: 'Install rolling version of packages'
+        type: boolean
+        default: false
+      skip_cypress:
+        description: 'Skip the Cypress end-to-end tests'
         type: boolean
         default: false
 
-concurrency:
-  group: trento-installation-tests
-  cancel-in-progress: false
-
-env:
-  AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
-  AZURE_BLOB_STORAGE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_CONTAINER }}
-  AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
-
 jobs:
-  trento-installation-tests:
-    name: Trento Installation Tests
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: read
-
-    env:
-      SSH_USERNAME: cloudadmin
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Generate machines config CSV
-        uses: ./.github/actions/generate-machines-config
-        with:
-          os_versions: ${{ vars.SUPPORTED_OS_VERSIONS }}
-
-      - name: Setup SSH keys
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.PRIVATE_SSH_KEY_CONTENT }}" > ~/.ssh/id_rsa
-          echo "${{ vars.PUBLIC_SSH_KEY_CONTENT }}" > ~/.ssh/id_rsa.pub
-          chmod 600 ~/.ssh/id_rsa
-          chmod 644 ~/.ssh/id_rsa.pub
-
-      - name: Azure Login
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Extract Azure Credentials
-        id: azure-creds
-        uses: ./.github/actions/extract-azure-credentials
-        with:
-          azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Parse tool versions
-        uses: endorama/asdf-parse-tool-versions@0ccedac6b6ae060388ab9f0ba4473a61afc21a57 # v1.5.0
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-
-      - name: Terraform Format Check
-        id: fmt
-        working-directory: ./terraform
-        run: terraform fmt -check -recursive
-        continue-on-error: true
-
-      - name: Terraform Init
-        id: init
-        working-directory: ./terraform
-        run: |
-          terraform init \
-            -backend-config="storage_account_name=${{ env.AZURE_BLOB_STORAGE }}" \
-            -backend-config="container_name=${{ env.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}" \
-            -backend-config="key=terraform.tfstate" \
-            -backend-config="resource_group_name=${{ vars.AZURE_RESOURCE_GROUP }}" \
-            -backend-config="client_id=${{ steps.azure-creds.outputs.client_id }}" \
-            -backend-config="client_secret=${{ steps.azure-creds.outputs.client_secret }}" \
-            -backend-config="tenant_id=${{ steps.azure-creds.outputs.tenant_id }}" \
-            -backend-config="subscription_id=${{ steps.azure-creds.outputs.subscription_id }}"
-
-      - name: Terraform Validate
-        id: validate
-        working-directory: ./terraform
-        run: terraform validate -no-color
-
-      - name: Set ARM_SUBSCRIPTION_ID
-        id: subscription
-        run: |
-          ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-          if [ -z "$ARM_SUBSCRIPTION_ID" ]; then
-            echo "Error: Could not retrieve subscription ID from Azure CLI"
-            exit 1
-          fi
-          echo "ARM_SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID" >> $GITHUB_ENV
-          echo "Subscription ID set successfully"
-
-      - name: Terraform Plan
-        id: plan
-        working-directory: ./terraform
-        run: terraform plan -no-color -out=tfplan -input=false
-        env:
-          TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
-          TF_VAR_azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
-          TF_VAR_ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
-          TF_VAR_ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-
-      - name: Terraform Apply
-        working-directory: ./terraform
-        run: terraform apply -auto-approve tfplan
-        env:
-          TF_VAR_ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-
-      - name: Get machine hosts from CSV
-        id: get-hosts
-        uses: ./.github/actions/get-machine-hosts
-        with:
-          csv_file: .machines.conf.csv
-          azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
-
-      - name: Register SUSE machines & activate modules
-        id: activate-modules
-        uses: ./.github/actions/suse-register-and-activate-modules
-        with:
-          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
-          ssh_username: ${{ env.SSH_USERNAME }}
-          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          registration_code: ${{ secrets.SUSE_REGISTRATION_CODE }}
-          registration_email: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
-
-      - name: Setup RPM repository on machines
-        id: setup-rpm-repo
-        uses: ./.github/actions/setup-rpm-repository
-        with:
-          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
-          ssh_username: ${{ env.SSH_USERNAME }}
-          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          azure_blob_storage: ${{ env.AZURE_BLOB_STORAGE }}
-          azure_blob_storage_container: ${{ env.AZURE_BLOB_STORAGE_CONTAINER }}
-          azure_blob_storage_sas_token: ${{ secrets.AZURE_BLOB_STORAGE_SAS_TOKEN }}
-
-      - name: Ansible playbook preparations
-        id: ansible-playbook-preparations
-        uses: ./.github/actions/ansible-playbook-preparations
-        with:
-          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
-          ssh_username: ${{ env.SSH_USERNAME }}
-          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
-
-      - name: Run Ansible Trento playbook
-        uses: ./.github/actions/run-ansible-trento-playbook
-        with:
-          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
-          ssh_username: ${{ env.SSH_USERNAME }}
-          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-
-      - name: Verify Trento instances healthcheck endpoints
-        uses: ./.github/actions/verify-trento-health
-        with:
-          hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
-
-      - name: Terraform Destroy
-        if: inputs.destroy_after
-        uses: ./.github/actions/terraform-destroy
-        with:
-          azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
-          azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
-          ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
-          ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          client_id: ${{ steps.azure-creds.outputs.client_id }}
-          client_secret: ${{ steps.azure-creds.outputs.client_secret }}
-          tenant_id: ${{ steps.azure-creds.outputs.tenant_id }}
-          subscription_id: ${{ steps.azure-creds.outputs.subscription_id }}
-  
+  installation-tests:
+    name: Run installation tests
+    uses: ./.github/workflows/trento-installation-base.yml
+    with:
+      sles_15_sp4: ${{ inputs.sles_15_sp4 }}
+      sles_15_sp5: ${{ inputs.sles_15_sp5 }}
+      sles_15_sp6: ${{ inputs.sles_15_sp6 }}
+      sles_15_sp7: ${{ inputs.sles_15_sp7 }}
+      sles_16_0: ${{ inputs.sles_16_0 }}
+      install_rolling: ${{ inputs.install_rolling }}
+      skip_cypress: ${{ inputs.skip_cypress }}
+    secrets: inherit

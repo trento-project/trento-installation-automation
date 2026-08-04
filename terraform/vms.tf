@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
 resource "azurerm_public_ip" "pip" {
   for_each            = local.virtual_machines
   name                = "${each.value.name}-pip"

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
 resource "azurerm_virtual_network" "vnet" {
   name                = "trento-testing-vnet"
   location            = data.azurerm_resource_group.rg.location

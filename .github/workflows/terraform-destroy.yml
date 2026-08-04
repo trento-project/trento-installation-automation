@@ -1,8 +1,12 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
 name: Azure Cleanup
 # Destroy Azure Resources
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 env:
   AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
@@ -23,7 +27,12 @@ jobs:
       - name: Generate machines config CSV
         uses: ./.github/actions/generate-machines-config
         with:
-          os_versions: ${{ vars.SUPPORTED_OS_VERSIONS }}
+          os_versions: |
+            15.4
+            15.5
+            15.6
+            15.7
+            16.0
 
       - name: Azure Login
         uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0

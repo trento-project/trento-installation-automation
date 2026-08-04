@@ -1,0 +1,87 @@
+name: 'Clean up Trento agent'
+description: 'Stop trento-agent on a target host and deregister its leftover host from Trento'
+
+inputs:
+  target_host_fqdn:
+    description: 'Target machine FQDN'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+  ssh_private_key:
+    description: 'SSH private key content'
+    required: true
+  web_admin_user:
+    description: 'Trento web admin username used to deregister leftover hosts'
+    required: false
+    default: 'admin'
+  web_admin_password:
+    description: 'Trento web admin password used to deregister leftover hosts'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Stop Trento agent on target host
+      uses: appleboy/ssh-action@823bd89e131d8d508129f9443cad5855e9ba96f0 # v1.2.4
+      with:
+        host: ${{ inputs.target_host_fqdn }}
+        username: ${{ inputs.ssh_username }}
+        key: ${{ inputs.ssh_private_key }}
+        script: |
+          set -euo pipefail
+          CURRENT_HOSTNAME=$(hostname -s)
+          if [[ "$CURRENT_HOSTNAME" != *target* ]]; then
+            exit 0
+          fi
+
+          sudo systemctl stop trento-agent
+
+    - name: Deregister leftover host from Trento
+      shell: bash
+      env:
+        WEB_URL: https://${{ inputs.target_host_fqdn }}
+        ADMIN_USER: ${{ inputs.web_admin_user }}
+        ADMIN_PASSWORD: ${{ inputs.web_admin_password }}
+      run: |
+        set -euo pipefail
+
+        access_token=$(curl -sSf -X POST "$WEB_URL/api/session" \
+          -H 'Content-Type: application/json' \
+          -d "{\"username\":\"${ADMIN_USER}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
+          | jq -r '.access_token')
+
+        host_id=$(curl -sSf "$WEB_URL/api/v1/hosts" \
+          -H "Authorization: Bearer ${access_token}" | jq -r '.[0].id // empty')
+
+        if [[ -z "$host_id" ]]; then
+          echo "No registered hosts to deregister"
+          exit 0
+        fi
+
+        # The heartbeat lapses within ~16s, so this is a generous margin. It is
+        # also kept below the access token expiration (180s) so the same token
+        # stays valid for every attempt.
+        max_attempts=15
+        retry_interval=10
+
+        echo "Deregistering host ${host_id}"
+        for attempt in $(seq 1 "$max_attempts"); do
+          # A curl failure (network/DNS/timeout) must not abort the step under
+          # `set -e`; treat it as a retryable attempt instead.
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+            "$WEB_URL/api/v1/hosts/${host_id}" \
+            -H "Authorization: Bearer ${access_token}") || status="000"
+          # 204: deregistered. 404: already gone. Both are terminal successes.
+          if [[ "$status" == "204" || "$status" == "404" ]]; then
+            echo "Host ${host_id} deregistered (HTTP ${status})"
+            exit 0
+          fi
+          # 000: request never completed (network/DNS/transient). 422: host still
+          # considered alive (heartbeat not yet lapsed). Both are retryable.
+          echo "Attempt ${attempt}/${max_attempts}: deregister returned HTTP ${status}, waiting for heartbeat to lapse..."
+          sleep "$retry_interval"
+        done
+
+        echo "Failed to deregister host ${host_id}: after retries" >&2
+        exit 1
