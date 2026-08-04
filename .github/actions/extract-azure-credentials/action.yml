@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
 name: 'Extract Azure Credentials'
 description: 'Extract individual fields from Azure credentials JSON'
 

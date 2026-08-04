@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
 variable "azure_resource_group" {
   description = "Azure resource group"
   type        = string
