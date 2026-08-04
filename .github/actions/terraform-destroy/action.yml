@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
 name: 'Terraform Destroy'
 description: 'Destroy Terraform-managed infrastructure in Azure'
 
@@ -14,9 +17,6 @@ inputs:
     required: true
   ssh_public_key_content:
     description: 'SSH public key content'
-    required: true
-  ssh_private_key_content:
-    description: 'SSH private key content'
     required: true
   client_id:
     description: 'Azure client ID'
@@ -38,7 +38,7 @@ runs:
       uses: endorama/asdf-parse-tool-versions@0ccedac6b6ae060388ab9f0ba4473a61afc21a57 # v1.5.0
 
     - name: Setup Terraform
-      uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+      uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 # v4.0.0
       with:
         terraform_version: ${{ env.TERRAFORM_VERSION }}
 
@@ -76,5 +76,5 @@ runs:
         TF_VAR_azure_resource_group: ${{ inputs.azure_resource_group }}
         TF_VAR_azure_owner_tag: ${{ inputs.azure_owner_tag }}
         TF_VAR_ssh_public_key_content: ${{ inputs.ssh_public_key_content }}
-        TF_VAR_ssh_private_key_content: ${{ inputs.ssh_private_key_content }}
+        TF_VAR_ssh_private_key_content: ""
       run: terraform destroy -auto-approve -input=false
