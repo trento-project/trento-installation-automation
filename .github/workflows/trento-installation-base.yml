@@ -64,7 +64,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Select OS versions
         id: select-os-versions
@@ -123,10 +123,10 @@ jobs:
           azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Parse tool versions
-        uses: endorama/asdf-parse-tool-versions@0ccedac6b6ae060388ab9f0ba4473a61afc21a57 # v1.5.0
+        uses: endorama/asdf-parse-tool-versions@23a7edd74b0f97626c857c48e32ebbe4ba596a23 # v1.5.1
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 # v4.0.0
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
@@ -287,10 +287,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Checkout Trento Web tests
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: trento-project/web
           path: trento-web
@@ -348,7 +348,7 @@ jobs:
           spec: ${{ inputs.cypress_spec }}
 
       - name: Upload cypress test screenshots
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: e2e-screenshots-${{ matrix.target_host }}
