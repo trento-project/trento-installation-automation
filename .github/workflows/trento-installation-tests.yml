@@ -34,6 +34,18 @@ on:
         description: 'Skip the Cypress end-to-end tests'
         type: boolean
         default: false
+      cypress_spec:
+        description: 'Cypress spec pattern to run. Leave empty to run the full suite.'
+        type: string
+        default: ''
+      web_ref:
+        description: 'Branch, tag or SHA of trento-project/web to take the Cypress tests from'
+        type: string
+        default: 'main'
+      destroy_after:
+        description: 'Destroy Terraform-managed infrastructure after the workflow finishes'
+        type: boolean
+        default: false
 
 jobs:
   installation-tests:
@@ -47,4 +59,7 @@ jobs:
       sles_16_0: ${{ inputs.sles_16_0 }}
       install_rolling: ${{ inputs.install_rolling }}
       skip_cypress: ${{ inputs.skip_cypress }}
+      cypress_spec: ${{ inputs.cypress_spec }}
+      web_ref: ${{ inputs.web_ref }}
+      destroy_after: ${{ inputs.destroy_after }}
     secrets: inherit
