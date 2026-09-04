@@ -28,5 +28,6 @@ locals {
     Owner = var.azure_owner_tag
   }
 
-
+  # https://learn.microsoft.com/en-us/azure/virtual-network/what-is-ip-address-168-63-129-16
+  azure_dns_resolver = "168.63.129.16"
 }

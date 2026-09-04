@@ -96,11 +96,13 @@ resource "null_resource" "wait_for_ssh" {
 
   provisioner "remote-exec" {
     inline = [
+      # remote-exec only reports the status of the last inline command.
+      "set -e",
       "echo 'SSH is ready on ${each.value.name}'",
-      # sshd accepts connections before systemd-resolved answers on the ::1 stub
-      # resolv.conf points to, so the SUSE registration that runs right after this
-      # can fail resolving scc.suse.com. Wait for name resolution as well.
-      "timeout 60 sh -c 'until getent hosts scc.suse.com >/dev/null; do sleep 2; done'",
+      # SLES 16 boots without /etc/resolv.conf when the Azure datasource of
+      # cloud-init fails to obtain its DHCP lease.
+      "timeout 120 sh -c 'until getent hosts scc.suse.com >/dev/null; do sleep 5; done' || echo 'nameserver ${local.azure_dns_resolver}' | sudo tee /etc/resolv.conf >/dev/null",
+      "getent hosts scc.suse.com >/dev/null",
       "echo 'DNS is ready on ${each.value.name}'",
     ]
   }
