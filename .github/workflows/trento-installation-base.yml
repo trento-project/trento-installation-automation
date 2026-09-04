@@ -38,6 +38,10 @@ on:
         description: 'Cypress spec pattern to run. Leave empty to run the full suite.'
         type: string
         default: ''
+      web_ref:
+        description: 'Branch, tag or commit of trento-project/web to take the Cypress tests from. Leave empty to use its default branch.'
+        type: string
+        default: ''
       destroy_after:
         description: 'Destroy Terraform-managed infrastructure after the workflow finishes'
         type: boolean
@@ -294,6 +298,7 @@ jobs:
         with:
           repository: trento-project/web
           path: trento-web
+          ref: ${{ inputs.web_ref }}
 
       - name: Trust test CA certificate
         run: |

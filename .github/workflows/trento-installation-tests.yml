@@ -34,6 +34,10 @@ on:
         description: 'Skip the Cypress end-to-end tests'
         type: boolean
         default: false
+      web_ref:
+        description: 'Branch, tag or commit of trento-project/web to take the Cypress tests from. Leave empty to use its default branch.'
+        type: string
+        default: ''
 
 jobs:
   installation-tests:
@@ -47,4 +51,5 @@ jobs:
       sles_16_0: ${{ inputs.sles_16_0 }}
       install_rolling: ${{ inputs.install_rolling }}
       skip_cypress: ${{ inputs.skip_cypress }}
+      web_ref: ${{ inputs.web_ref }}
     secrets: inherit

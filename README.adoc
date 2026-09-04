@@ -152,6 +152,7 @@ The manual workflows expose one boolean input per supported version so you can c
 . Select the SLES versions you want to deploy to
 . Optionally enable `install_rolling` to install packages from the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS] instead of Azure Blob Storage
 . Optionally enable `skip_cypress` to stop after deployment and health verification
+. Optionally set `web_ref` to the branch, tag or commit of https://github.com/trento-project/web[trento-project/web] the Cypress tests are taken from
 . Click **Run workflow**
 
 The workflow always recreates the Terraform-managed infrastructure before installing Trento. After installation, Cypress end-to-end tests run against each target node unless `skip_cypress` is enabled. If Cypress fails, screenshots are uploaded as workflow artifacts.
@@ -190,6 +191,14 @@ If the version directory is missing or contains no RPMs, every package is instal
 When preparing a run that includes SP4, upload the SP5 `ansible-trento` release candidate to the `15/4/` directory alongside the rest of the SP4 packages.
 
 NOTE: This workaround only exists while SLES 15 SP4 is supported, and can be removed once support ends at the end of 2026.
+
+=== Choosing which Cypress tests to run
+
+The end-to-end tests live in https://github.com/trento-project/web[trento-project/web], and by default they are taken from its default branch. That is only correct when the packages under validation match it. Testing a patch release with tests from the default branch reports false positives, because those tests cover features that the released RPMs do not have yet.
+
+Set `web_ref` to the revision matching the packages under validation. Every release is tagged in the `web` repository, so validating the `3.1.5` patch release means setting `web_ref` to `3.1.5`. Any branch or commit SHA is accepted too, which is useful to try out a test fix before it is merged. Leaving the input empty keeps the default branch, which is what you want when validating rolling packages.
+
+To confirm afterwards which revision produced the results, check the log of the `Checkout Trento Web tests` step, which reports the commit it checked out.
 
 === Accessing the deployed environments
 
