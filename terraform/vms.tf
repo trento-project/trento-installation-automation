@@ -95,7 +95,14 @@ resource "null_resource" "wait_for_ssh" {
   }
 
   provisioner "remote-exec" {
-    inline = ["echo 'SSH is ready on ${each.value.name}'"]
+    inline = [
+      "echo 'SSH is ready on ${each.value.name}'",
+      # sshd accepts connections before systemd-resolved answers on the ::1 stub
+      # resolv.conf points to, so the SUSE registration that runs right after this
+      # can fail resolving scc.suse.com. Wait for name resolution as well.
+      "timeout 60 sh -c 'until getent hosts scc.suse.com >/dev/null; do sleep 2; done'",
+      "echo 'DNS is ready on ${each.value.name}'",
+    ]
   }
 
   depends_on = [azurerm_linux_virtual_machine.vm]
