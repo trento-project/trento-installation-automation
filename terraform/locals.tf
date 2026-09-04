@@ -28,10 +28,6 @@ locals {
     Owner = var.azure_owner_tag
   }
 
-  # Recursive DNS resolver of the Azure platform. It is a static virtual public
-  # IP, identical in every region and virtual network, and the address the Azure
-  # DHCP server hands out to virtual networks that do not define custom DNS
-  # servers, which is the case of the one in networking.tf.
   # https://learn.microsoft.com/en-us/azure/virtual-network/what-is-ip-address-168-63-129-16
   azure_dns_resolver = "168.63.129.16"
 }
