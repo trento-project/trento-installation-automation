@@ -96,11 +96,21 @@ resource "null_resource" "wait_for_ssh" {
 
   provisioner "remote-exec" {
     inline = [
+      # remote-exec runs the inline commands as a single script and only reports
+      # the exit status of the last one, so without this a failure below would be
+      # reported as a successful provisioning.
+      "set -e",
       "echo 'SSH is ready on ${each.value.name}'",
-      # sshd accepts connections before systemd-resolved answers on the ::1 stub
-      # resolv.conf points to, so the SUSE registration that runs right after this
-      # can fail resolving scc.suse.com. Wait for name resolution as well.
-      "timeout 60 sh -c 'until getent hosts scc.suse.com >/dev/null; do sleep 2; done'",
+      # On SLES 16 the Azure datasource of cloud-init sometimes fails to get its
+      # own DHCP lease, because the dhcpcd started from the initrd already holds
+      # one. cloud-init then never writes /etc/resolv.conf, NetworkManager assumes
+      # the externally configured interface and writes nothing either, and the
+      # machine is left without a resolver at all. The SUSE registration that runs
+      # right after this falls back to the [::1]:53 default of the Go resolver,
+      # where nothing listens, and fails. Give the regular boot path some time and
+      # otherwise write the resolver the machine should have been given itself.
+      "timeout 120 sh -c 'until getent hosts scc.suse.com >/dev/null; do sleep 5; done' || echo 'nameserver ${local.azure_dns_resolver}' | sudo tee /etc/resolv.conf >/dev/null",
+      "getent hosts scc.suse.com >/dev/null",
       "echo 'DNS is ready on ${each.value.name}'",
     ]
   }
