@@ -332,19 +332,32 @@ jobs:
       - name: Install web assets dependencies
         run: cd trento-web/assets && npm ci
 
-      # The installation phase deploys a real agent; clean it up before Cypress generates photofinish data to avoid conflicts during tests execution.
-      - name: Clean up Trento agent from target host
-        uses: ./.github/actions/cleanup-trento-agent
+      # The 3.1.5 Cypress suite deregisters the host itself; only stop the agent and wait for its
+      # heartbeat to lapse, because that deregistration does not retry on a 422.
+      - name: Stop Trento agent on target host
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
-          target_host_fqdn: ${{ matrix.target_host }}
-          ssh_username: ${{ env.SSH_USERNAME }}
-          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
+          host: ${{ matrix.target_host }}
+          username: ${{ env.SSH_USERNAME }}
+          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          script: |
+            set -euo pipefail
+            CURRENT_HOSTNAME=$(hostname -s)
+            if [[ "$CURRENT_HOSTNAME" != *target* ]]; then
+              exit 0
+            fi
+
+            sudo systemctl stop trento-agent
+            sleep 30
 
       - name: Cypress run
         uses: cypress-io/github-action@09090944bd8aaa2a517cefb6e38bf1aae336b42b # v7.4.3
         env:
           cypress_video: false
+          # 3.1.5 predates the Cypress.env -> Cypress.expose migration.
+          cypress_photofinish_binary: ${{ steps.photofinish-path.outputs.path }}
+          cypress_wanda_mode: prod
+          cypress_web_mode: prod
         with:
           working-directory: trento-web/test/e2e
           wait-on-timeout: 30
