@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 resource "azurerm_virtual_network" "vnet" {
-  name                = "trento-testing-vnet"
+  name                = "trento-testing-vnet${var.environment_suffix}"
   location            = data.azurerm_resource_group.rg.location
   resource_group_name = data.azurerm_resource_group.rg.name
   address_space       = ["10.0.0.0/16"]
@@ -22,7 +22,7 @@ resource "azurerm_subnet" "subnet" {
 }
 
 resource "azurerm_network_security_group" "nsg" {
-  name                = "trento-testing-nsg"
+  name                = "trento-testing-nsg${var.environment_suffix}"
   location            = data.azurerm_resource_group.rg.location
   resource_group_name = data.azurerm_resource_group.rg.name
   tags                = local.common_tags
