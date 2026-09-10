@@ -1,8 +1,16 @@
 version: 2
 updates:
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       interval: "weekly"
     cooldown:
       default-days: 14
+    groups:
+      # One pull request per action, instead of one per directory
+      github-actions:
+        group-by: dependency-name
+        patterns:
+          - "*"
