@@ -27,3 +27,14 @@ variable "ssh_private_key_content" {
   description = "SSH private key for provisioner connections"
   sensitive   = true
 }
+
+variable "environment_suffix" {
+  type        = string
+  description = "Suffix appended to VM and network resource names to keep concurrent environments apart"
+  default     = ""
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]*$", var.environment_suffix)) && !endswith(var.environment_suffix, "-")
+    error_message = "The environment_suffix must be lowercase alphanumeric or hyphens, and must not end with a hyphen."
+  }
+}
