@@ -37,7 +37,7 @@ runs:
         echo "urls=$urls" >> $GITHUB_OUTPUT
 
     - name: Check Trento health endpoints
-      uses: jtalk/url-health-check-action@b716ccb6645355dd9fcce8002ce460e5474f7f00 # v4
+      uses: jtalk/url-health-check-action@e7d5ebdc9027fbf494d2d034f3e8fc78f8b7a2b9 # v5
       with:
         url: ${{ steps.build-urls.outputs.urls }}
         max-attempts: 5
