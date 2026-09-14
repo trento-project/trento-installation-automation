@@ -7,14 +7,8 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - '**.adoc'
-      - 'LICENSE'
   pull_request:
     types: [opened, synchronize]
-    paths-ignore:
-      - '**.adoc'
-      - 'LICENSE'
   workflow_dispatch:
 
 # Superseded runs are queued instead of canceled: canceling mid `terraform apply` leaves
@@ -33,3 +27,13 @@ jobs:
       cypress_spec: '**/about.cy.js'
       destroy_after: true
     secrets: inherit
+
+  # Fixed name to use as the required status check: the Cypress jobs are a
+  # matrix and their names embed the target host FQDN.
+  ci-passed:
+    name: CI passed
+    needs: ci
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - run: '[ "${{ needs.ci.result }}" = success ]'
