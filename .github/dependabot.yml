@@ -9,8 +9,7 @@ updates:
     cooldown:
       default-days: 14
     groups:
-      # One pull request per action, instead of one per directory
+      # A single pull request for every action bump, across all directories
       github-actions:
-        group-by: dependency-name
         patterns:
           - "*"
