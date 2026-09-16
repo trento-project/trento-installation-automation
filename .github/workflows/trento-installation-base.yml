@@ -243,6 +243,7 @@ jobs:
           ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
+          azure_region: ${{ steps.get-hosts.outputs.location }}
 
       - name: Run Ansible Trento playbook
         uses: ./.github/actions/run-ansible-trento-playbook

@@ -12,6 +12,14 @@ inputs:
   azure_resource_group:
     description: 'Azure resource group name'
     required: true
+  backend_resource_group:
+    description: 'Azure resource group holding the Terraform state storage account. Leave empty to use azure_resource_group.'
+    required: false
+    default: ''
+  state_key:
+    description: 'Terraform state blob name'
+    required: false
+    default: 'terraform.tfstate'
   azure_owner_tag:
     description: 'Azure owner tag'
     required: true
@@ -46,12 +54,15 @@ runs:
       id: init
       shell: bash
       working-directory: ${{ inputs.working_directory }}
+      env:
+        STATE_KEY: ${{ inputs.state_key }}
+        BACKEND_RESOURCE_GROUP: ${{ inputs.backend_resource_group || inputs.azure_resource_group }}
       run: |
         terraform init \
           -backend-config="storage_account_name=${{ env.AZURE_BLOB_STORAGE }}" \
           -backend-config="container_name=${{ env.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}" \
-          -backend-config="key=terraform.tfstate" \
-          -backend-config="resource_group_name=${{ inputs.azure_resource_group }}" \
+          -backend-config="key=$STATE_KEY" \
+          -backend-config="resource_group_name=$BACKEND_RESOURCE_GROUP" \
           -backend-config="client_id=${{ inputs.client_id }}" \
           -backend-config="client_secret=${{ inputs.client_secret }}" \
           -backend-config="tenant_id=${{ inputs.tenant_id }}" \

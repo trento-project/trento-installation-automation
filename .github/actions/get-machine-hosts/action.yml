@@ -12,6 +12,10 @@ inputs:
   azure_resource_group:
     description: 'Azure resource group name to query for location'
     required: true
+  environment_suffix:
+    description: 'Suffix appended to VM names, matching the Terraform environment_suffix variable'
+    required: false
+    default: ''
 
 outputs:
   hosts_fqdn_csv:
@@ -20,6 +24,9 @@ outputs:
   target_hosts_json:
     description: 'JSON array of target machine FQDNs for matrix strategy'
     value: ${{ steps.generate.outputs.target_hosts_json }}
+  location:
+    description: 'Azure region of the resource group'
+    value: ${{ steps.generate.outputs.location }}
 
 runs:
   using: 'composite'
@@ -27,10 +34,11 @@ runs:
     - name: Generate host list from CSV
       id: generate
       shell: bash
+      env:
+        CSV_FILE: ${{ inputs.csv_file }}
+        AZURE_RESOURCE_GROUP: ${{ inputs.azure_resource_group }}
+        ENVIRONMENT_SUFFIX: ${{ inputs.environment_suffix }}
       run: |
-        CSV_FILE="${{ inputs.csv_file }}"
-        AZURE_RESOURCE_GROUP="${{ inputs.azure_resource_group }}"
-
         # Check if CSV file exists
         if [ ! -f "$CSV_FILE" ]; then
           echo "Error: $CSV_FILE does not exist"
@@ -61,7 +69,7 @@ runs:
 
           # Only include control and target machines
           if [[ "$prefix" == control* ]] || [[ "$prefix" == target* ]]; then
-            vm_name="${prefix}${slesVersion}sp${spVersion}"
+            vm_name="${prefix}${slesVersion}sp${spVersion}${ENVIRONMENT_SUFFIX}"
             fqdn="${vm_name}.${LOCATION}.cloudapp.azure.com"
             hosts_array+=("$fqdn")
             if [[ "$prefix" == target* ]]; then
@@ -85,6 +93,7 @@ runs:
         # Set output
         echo "hosts_fqdn_csv=$hosts_fqdn_csv" >> $GITHUB_OUTPUT
         echo "target_hosts_json=$target_hosts_json" >> $GITHUB_OUTPUT
+        echo "location=$LOCATION" >> $GITHUB_OUTPUT
 
         echo "Generated FQDN list for ${#hosts_array[@]} machines: $hosts_fqdn_csv"
         echo "Generated target hosts JSON for matrix: $target_hosts_json"

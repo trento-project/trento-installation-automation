@@ -17,6 +17,9 @@ inputs:
   web_admin_password:
     description: 'Trento web admin password'
     required: true
+  azure_region:
+    description: 'Azure region the machines live in, used to build their public FQDN'
+    required: true
 
 runs:
   using: 'composite'
@@ -27,11 +30,12 @@ runs:
         SSH_USERNAME: ${{ inputs.ssh_username }}
         SSH_PRIVATE_KEY: ${{ inputs.ssh_private_key }}
         WEB_ADMIN_PASSWORD: ${{ inputs.web_admin_password }}
+        AZURE_REGION: ${{ inputs.azure_region }}
       with:
         host: ${{ inputs.hosts_fqdn_csv }}
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
-        envs: SSH_USERNAME,SSH_PRIVATE_KEY,WEB_ADMIN_PASSWORD
+        envs: SSH_USERNAME,SSH_PRIVATE_KEY,WEB_ADMIN_PASSWORD,AZURE_REGION
         script: |
           set -e
 
@@ -44,7 +48,6 @@ runs:
           fi
 
           # Construct Azure public FQDN from short hostname
-          AZURE_REGION="westeurope"
           CURRENT_FQDN="${CURRENT_HOSTNAME}.${AZURE_REGION}.cloudapp.azure.com"
 
           # Derive target FQDN by replacing 'control' with 'target'
