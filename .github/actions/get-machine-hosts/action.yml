@@ -34,11 +34,11 @@ runs:
     - name: Generate host list from CSV
       id: generate
       shell: bash
+      env:
+        CSV_FILE: ${{ inputs.csv_file }}
+        AZURE_RESOURCE_GROUP: ${{ inputs.azure_resource_group }}
+        ENVIRONMENT_SUFFIX: ${{ inputs.environment_suffix }}
       run: |
-        CSV_FILE="${{ inputs.csv_file }}"
-        AZURE_RESOURCE_GROUP="${{ inputs.azure_resource_group }}"
-        ENVIRONMENT_SUFFIX="${{ inputs.environment_suffix }}"
-
         # Check if CSV file exists
         if [ ! -f "$CSV_FILE" ]; then
           echo "Error: $CSV_FILE does not exist"
