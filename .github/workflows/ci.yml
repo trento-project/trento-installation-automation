@@ -29,7 +29,7 @@ jobs:
     secrets: inherit
 
   # Fixed name to use as the required status check: the Cypress jobs are a
-  # matrix and their names embed the target host FQDN.
+  # matrix and their names embed the host FQDN.
   ci-passed:
     name: CI passed
     needs: ci

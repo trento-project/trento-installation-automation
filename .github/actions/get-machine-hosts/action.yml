@@ -19,11 +19,11 @@ inputs:
 
 outputs:
   hosts_fqdn_csv:
-    description: 'Comma-separated list of control and target machine FQDNs'
+    description: 'Comma-separated list of machine FQDNs'
     value: ${{ steps.generate.outputs.hosts_fqdn_csv }}
-  target_hosts_json:
-    description: 'JSON array of target machine FQDNs for matrix strategy'
-    value: ${{ steps.generate.outputs.target_hosts_json }}
+  hosts_json:
+    description: 'JSON array of machine FQDNs for matrix strategy'
+    value: ${{ steps.generate.outputs.hosts_json }}
   location:
     description: 'Azure region of the resource group'
     value: ${{ steps.generate.outputs.location }}
@@ -53,47 +53,38 @@ runs:
         fi
         echo "Using location: $LOCATION"
 
-        # Generate hostname list from CSV (only control and target machines)
+        # Generate hostname list from CSV
         hosts_array=()
-        target_fqdns=()
-        while IFS=, read -r prefix slesVersion spVersion; do
+        while IFS=, read -r slesVersion spVersion; do
           # Skip header and empty lines
-          if [ "$prefix" = "prefix" ] || [ -z "$prefix" ]; then
+          if [ "$slesVersion" = "slesVersion" ] || [ -z "$slesVersion" ]; then
             continue
           fi
 
           # Trim whitespace and carriage returns
-          prefix=$(echo "$prefix" | tr -d '\r' | xargs)
           slesVersion=$(echo "$slesVersion" | tr -d '\r' | xargs)
           spVersion=$(echo "$spVersion" | tr -d '\r' | xargs)
 
-          # Only include control and target machines
-          if [[ "$prefix" == control* ]] || [[ "$prefix" == target* ]]; then
-            vm_name="${prefix}${slesVersion}sp${spVersion}${ENVIRONMENT_SUFFIX}"
-            fqdn="${vm_name}.${LOCATION}.cloudapp.azure.com"
-            hosts_array+=("$fqdn")
-            if [[ "$prefix" == target* ]]; then
-              target_fqdns+=("$fqdn")
-            fi
-          fi
+          vm_name="trento${slesVersion}sp${spVersion}${ENVIRONMENT_SUFFIX}"
+          hosts_array+=("${vm_name}.${LOCATION}.cloudapp.azure.com")
         done < "$CSV_FILE"
 
         # Check if we found any hosts
         if [ ${#hosts_array[@]} -eq 0 ]; then
-          echo "Error: No control or target machines found in $CSV_FILE"
+          echo "Error: No machines found in $CSV_FILE"
           exit 1
         fi
 
         # Generate comma-separated FQDN list with location
         hosts_fqdn_csv=$(IFS=','; echo "${hosts_array[*]}")
 
-        # Generate JSON array for target hosts
-        target_hosts_json="[$(printf '"%s",' "${target_fqdns[@]}" | sed 's/,$//')]"
+        # Generate JSON array for the e2e test matrix
+        hosts_json="[$(printf '"%s",' "${hosts_array[@]}" | sed 's/,$//')]"
 
         # Set output
         echo "hosts_fqdn_csv=$hosts_fqdn_csv" >> $GITHUB_OUTPUT
-        echo "target_hosts_json=$target_hosts_json" >> $GITHUB_OUTPUT
+        echo "hosts_json=$hosts_json" >> $GITHUB_OUTPUT
         echo "location=$LOCATION" >> $GITHUB_OUTPUT
 
         echo "Generated FQDN list for ${#hosts_array[@]} machines: $hosts_fqdn_csv"
-        echo "Generated target hosts JSON for matrix: $target_hosts_json"
+        echo "Generated hosts JSON for matrix: $hosts_json"

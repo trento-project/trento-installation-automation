@@ -16,13 +16,12 @@ runs:
       shell: bash
       run: |
         {
-          echo "prefix,slesVersion,spVersion"
+          echo "slesVersion,spVersion"
           while IFS= read -r version; do
             version=$(echo "$version" | tr -d '\r' | xargs)
             [ -z "$version" ] && continue
             sles_major="${version%%.*}"
             sp="${version##*.}"
-            echo "control,${sles_major},${sp}"
-            echo "target,${sles_major},${sp}"
+            echo "${sles_major},${sp}"
           done <<< "${{ inputs.os_versions }}"
         } > .machines.conf.csv

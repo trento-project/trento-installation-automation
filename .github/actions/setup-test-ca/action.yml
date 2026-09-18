@@ -56,13 +56,7 @@ runs:
         for host in "${HOSTS[@]}"; do
           echo "Distributing CA to $host..."
           ssh -o StrictHostKeyChecking=no ${{ inputs.ssh_username }}@$host "mkdir -p ~/.ssl"
-          if [[ "$host" == control* ]]; then
-            # Control nodes need both cert and key for certificate generation
-            scp -o StrictHostKeyChecking=no "$CERTS_DIR/ca.key" "$CERTS_DIR/ca.crt" ${{ inputs.ssh_username }}@$host:~/.ssl/
-          else
-            # Target nodes only need the certificate for trust
-            scp -o StrictHostKeyChecking=no "$CERTS_DIR/ca.crt" ${{ inputs.ssh_username }}@$host:~/.ssl/
-          fi
+          scp -o StrictHostKeyChecking=no "$CERTS_DIR/ca.crt" "$CERTS_DIR/ca.key" ${{ inputs.ssh_username }}@$host:~/.ssl/
         done
 
     - name: Trust CA certificate on runner
@@ -75,7 +69,7 @@ runs:
         sudo update-ca-certificates
         echo "CA certificate trusted on runner"
 
-    - name: Import CA certificate to system trust store on target hosts
+    - name: Import CA certificate to system trust store on hosts
       uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
       with:
         host: ${{ inputs.hosts_fqdn_csv }}
@@ -83,14 +77,6 @@ runs:
         key: ${{ inputs.ssh_private_key }}
         script: |
           set -euo pipefail
-
-          CURRENT_HOSTNAME=$(hostname -s)
-
-          # Only import on target nodes, not control nodes
-          if [[ "$CURRENT_HOSTNAME" == control* ]]; then
-            echo "Skipping CA import on control node: $CURRENT_HOSTNAME"
-            exit 0
-          fi
 
           # Import CA certificate to system trust store
           sudo mkdir -p /usr/share/pki/trust/anchors
