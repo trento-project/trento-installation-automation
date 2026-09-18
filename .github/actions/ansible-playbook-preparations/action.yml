@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 name: 'Ansible Playbook Preparations'
-description: 'Prepare control nodes for Ansible playbook execution (SSH keys, SSL certs, inventory generation)'
+description: 'Prepare each machine to run the Ansible playbook against itself (SSH keys, SSL certs, inventory generation)'
 
 inputs:
   hosts_fqdn_csv:
@@ -24,7 +24,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Generate signed certificates and Ansible inventory
+    - name: Generate signed certificate and self-targeting Ansible inventory
       uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
       env:
         SSH_USERNAME: ${{ inputs.ssh_username }}
@@ -39,26 +39,18 @@ runs:
         script: |
           set -e
 
-          # Get current hostname (short name, e.g., control15sp6rpm)
+          # Get current hostname (short name, e.g., trento15sp6)
           CURRENT_HOSTNAME=$(hostname -s)
-
-          # Only run on control nodes
-          if [[ "$CURRENT_HOSTNAME" != *control* ]]; then
-            exit 0
-          fi
 
           # Construct Azure public FQDN from short hostname
           CURRENT_FQDN="${CURRENT_HOSTNAME}.${AZURE_REGION}.cloudapp.azure.com"
 
-          # Derive target FQDN by replacing 'control' with 'target'
-          TARGET_FQDN="${CURRENT_FQDN/control/target}"
-
-          # Setup SSH private key for Ansible and for communicating with target nodes
+          # Setup SSH private key for Ansible to reach this same machine
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          # Add target to known_hosts to avoid interactive prompt
-          ssh-keyscan -H "$TARGET_FQDN" >> ~/.ssh/known_hosts 2>/dev/null
+          # Add the machine itself to known_hosts to avoid interactive prompt
+          ssh-keyscan -H "$CURRENT_FQDN" >> ~/.ssh/known_hosts 2>/dev/null
 
           # Prepare SSL certificates directory
           CERTS_DIR="$HOME/.ssl"
@@ -77,15 +69,15 @@ runs:
             exit 1
           fi
 
-          echo "Generating signed certificate for $TARGET_FQDN..."
+          echo "Generating signed certificate for $CURRENT_FQDN..."
           # 2. Generate Server key and Certificate Signing Request (CSR)
           openssl genrsa -out "$CERTS_DIR/trento.key" 2048
-          openssl req -new -key "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.csr" -subj "/CN=$TARGET_FQDN"
+          openssl req -new -key "$CERTS_DIR/trento.key" -out "$CERTS_DIR/trento.csr" -subj "/CN=$CURRENT_FQDN"
 
           # 3. Sign the Server certificate with the CA
           openssl x509 -req -in "$CERTS_DIR/trento.csr" -CA "$CERTS_DIR/ca.crt" -CAkey "$CERTS_DIR/ca.key" -CAcreateserial \
             -out "$CERTS_DIR/trento.crt" -days 365 -sha256 \
-            -extfile <(echo "subjectAltName=DNS:$TARGET_FQDN")
+            -extfile <(echo "subjectAltName=DNS:$CURRENT_FQDN")
 
           # Create Ansible inventory directory if it doesn't exist
           sudo mkdir -p /etc/ansible
@@ -124,7 +116,7 @@ runs:
                   nginx_ssl_cert: "{{ lookup('file', '$CERTS_DIR/trento.crt') }}"
                   nginx_ssl_key: "{{ lookup('file', '$CERTS_DIR/trento.key') }}"
                 hosts:
-                  ${TARGET_FQDN}:
+                  ${CURRENT_FQDN}:
                     ansible_user: $SSH_USERNAME
               trento_server:
                 children:

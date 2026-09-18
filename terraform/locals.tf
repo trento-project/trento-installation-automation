@@ -10,7 +10,7 @@ locals {
 
   source_virtual_machines = {
     for vm in local.machines_list :
-    "${vm.prefix}${vm.slesVersion}sp${vm.spVersion}" => vm
+    "trento${vm.slesVersion}sp${vm.spVersion}" => vm
   }
 
   virtual_machines = {

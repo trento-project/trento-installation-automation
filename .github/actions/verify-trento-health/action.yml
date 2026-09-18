@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 name: 'Verify Trento Health'
-description: 'Verify Trento readyz and healthz endpoints on target machines'
+description: 'Verify Trento readyz and healthz endpoints on every machine'
 
 inputs:
   hosts_fqdn_csv:
@@ -22,9 +22,7 @@ runs:
 
         urls=""
         for host in "${HOSTS[@]}"; do
-          if [[ "$host" == target* ]]; then
-            urls+="https://${host}/api/readyz|https://${host}/api/healthz|https://${host}/wanda/api/readyz|https://${host}/wanda/api/healthz|"
-          fi
+          urls+="https://${host}/api/readyz|https://${host}/api/healthz|https://${host}/wanda/api/readyz|https://${host}/wanda/api/healthz|"
         done
 
         # Remove trailing pipe

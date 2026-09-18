@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 name: 'Run Ansible Trento Playbook'
-description: 'Run the Trento playbook on control nodes'
+description: 'Run the Trento playbook on every machine, targeting itself'
 
 inputs:
   hosts_fqdn_csv:
@@ -18,7 +18,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Run Ansible Trento playbook on control nodes
+    - name: Run Ansible Trento playbook
       uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
       with:
         host: ${{ inputs.hosts_fqdn_csv }}
@@ -29,11 +29,6 @@ runs:
           set -e
 
           CURRENT_HOSTNAME=$(hostname -s)
-
-          # Only run on control nodes
-          if [[ "$CURRENT_HOSTNAME" != *control* ]]; then
-            exit 0
-          fi
 
           INVENTORY_FILE="/etc/ansible/trento-inventory.yml"
 
