@@ -46,6 +46,10 @@ on:
         description: 'Destroy Terraform-managed infrastructure after the workflow finishes'
         type: boolean
         default: false
+    outputs:
+      hosts_json:
+        description: 'JSON array with the FQDN of every deployed host'
+        value: ${{ jobs.provision-and-deploy.outputs.hosts_json }}
 concurrency:
   group: trento-installation-tests
   cancel-in-progress: false

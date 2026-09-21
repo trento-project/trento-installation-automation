@@ -34,10 +34,18 @@ on:
         description: 'Skip the Cypress end-to-end tests'
         type: boolean
         default: false
+      run_alerting_tests:
+        description: 'Run the email alerting tests against the deployed environment'
+        type: boolean
+        default: false
       web_ref:
         description: 'Branch, tag or commit of trento-project/web to take the Cypress tests from. Leave empty to use its default branch.'
         type: string
         default: ''
+
+env:
+  SSH_USERNAME: cloudadmin
+  PHOTOFINISH_VERSION: v1.4.2
 
 jobs:
   installation-tests:
@@ -53,3 +61,94 @@ jobs:
       skip_cypress: ${{ inputs.skip_cypress }}
       web_ref: ${{ inputs.web_ref }}
     secrets: inherit
+
+  # Alerting needs a mail catcher and a configuration the standard deployment
+  # does not provide, so it runs after the regular suite on the same machines.
+  alerting-tests:
+    name: Run alerting tests (${{ matrix.host }})
+    needs: installation-tests
+    if: ${{ inputs.run_alerting_tests }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        host: ${{ fromJson(needs.installation-tests.outputs.hosts_json || '[]') }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout Trento Web tests
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: trento-project/web
+          path: trento-web
+          ref: ${{ inputs.web_ref }}
+
+      - name: Trust test CA certificate
+        run: |
+          set -euo pipefail
+          CA_CERT_FILE="/usr/local/share/ca-certificates/trento-ca.crt"
+          sudo mkdir -p /usr/local/share/ca-certificates/
+          sudo tee "$CA_CERT_FILE" > /dev/null <<'EOF_CA_CRT'
+          ${{ vars.TRENTO_TEST_CA_CRT }}
+          EOF_CA_CRT
+          openssl x509 -in "$CA_CERT_FILE" -noout > /dev/null
+          sudo update-ca-certificates
+          echo "NODE_EXTRA_CA_CERTS=$CA_CERT_FILE" >> "$GITHUB_ENV"
+
+      - name: Install photofinish
+        uses: jaxxstorm/action-install-gh-release@25e24d2d23ae098373794ef1d6faecb48ee52da8 # v3.0.0
+        with:
+          repo: trento-project/photofinish
+          tag: ${{ env.PHOTOFINISH_VERSION }}
+          cache: enable
+          chmod: 0755
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get photofinish path
+        id: photofinish-path
+        run: |
+          set -euo pipefail
+          photofinish_path="$(command -v photofinish)"
+          echo "path=$photofinish_path" >> "$GITHUB_OUTPUT"
+
+      - name: Install web assets dependencies
+        run: cd trento-web/assets && npm ci
+
+      - name: Clean up Trento agent from host
+        uses: ./.github/actions/cleanup-trento-agent
+        with:
+          host_fqdn: ${{ matrix.host }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
+
+      - name: Setup Mailpit
+        uses: ./.github/actions/setup-mailpit
+        with:
+          host_fqdn: ${{ matrix.host }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+
+      # The deployment writes no alerting variables, so Trento boots with the
+      # settings editable from the UI: flows 1 and 3.
+      - name: Cypress run
+        uses: cypress-io/github-action@09090944bd8aaa2a517cefb6e38bf1aae336b42b # v7.4.3
+        env:
+          cypress_video: false
+        with:
+          working-directory: trento-web/test/e2e
+          wait-on-timeout: 30
+          config: baseUrl=https://${{ matrix.host }},retries=2
+          expose: photofinish_binary=${{ steps.photofinish-path.outputs.path }},wanda_mode=prod,web_mode=prod,ALERTING_TESTS=true,ALERTING_DB_TESTS=true
+          spec: cypress/e2e/alerting.cy.js
+
+      - name: Upload cypress test screenshots
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: alerting-screenshots-${{ matrix.host }}
+          path: trento-web/test/e2e/cypress/screenshots/
+          retention-days: 1

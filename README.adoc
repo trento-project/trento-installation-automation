@@ -151,10 +151,19 @@ The manual workflows expose one boolean input per supported version so you can c
 . Select the SLES versions you want to deploy to
 . Optionally enable `install_rolling` to install packages from the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS] instead of Azure Blob Storage
 . Optionally enable `skip_cypress` to stop after deployment and health verification
+. Optionally enable `run_alerting_tests` to run the email alerting suite after the regular one
 . Optionally set `web_ref` to the branch, tag or commit of https://github.com/trento-project/web[trento-project/web] the Cypress tests are taken from
 . Click **Run workflow**
 
 The workflow always recreates the Terraform-managed infrastructure before installing Trento. After installation, Cypress end-to-end tests run against each machine unless `skip_cypress` is enabled. If Cypress fails, screenshots are uploaded as workflow artifacts.
+
+=== Alerting tests
+
+Enabling `run_alerting_tests` adds a job that runs `alerting.cy.js` against every deployed machine once the regular suite has finished. It needs a mail catcher, so the job starts Mailpit **on the runner** and opens a reverse SSH tunnel that publishes the runner's port 1025 on the machine's loopback. Trento dials `localhost:1025` for SMTP and Cypress reads the mailbox on the runner's `localhost:8025`, so both endpoints hardcoded in the `web` test suite stay valid and nothing is installed on the machine.
+
+The deployment writes no alerting variables into `/etc/trento/trento-web`, so Trento starts with the alerting settings editable from the UI. That covers the flows where the configuration lives in the database. The flows where it is enforced from the environment need the service to be stopped and reconfigured first, and are not automated yet.
+
+Combine it with `skip_cypress` to deploy and run only the alerting suite.
 
 Two behaviors are worth knowing before launching a run:
 

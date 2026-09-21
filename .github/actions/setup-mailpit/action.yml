@@ -1,0 +1,73 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Setup Mailpit'
+description: 'Run Mailpit on the runner and expose its SMTP port on the host loopback'
+
+inputs:
+  host_fqdn:
+    description: 'FQDN of the machine running trento-web'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+  ssh_private_key:
+    description: 'SSH private key content'
+    required: true
+  mailpit_image:
+    description: 'Mailpit container image'
+    required: false
+    default: 'axllent/mailpit:v1.28.2'
+
+runs:
+  using: 'composite'
+  steps:
+    # Credentials and ports match web/docker-compose.yaml, which is what the
+    # Cypress alerting page object assumes.
+    - name: Start Mailpit
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        docker run -d --name mailpit \
+          -p 127.0.0.1:1025:1025 \
+          -p 127.0.0.1:8025:8025 \
+          -e MP_SMTP_AUTH=trentouser:pass \
+          -e MP_SMTP_AUTH_ALLOW_INSECURE=true \
+          "${{ inputs.mailpit_image }}"
+
+        timeout 60 bash -c \
+          'until curl -sf http://localhost:8025/api/v1/info > /dev/null; do sleep 2; done'
+
+    # trento-web dials localhost:1025, so the runner's Mailpit has to appear on
+    # the machine's loopback. A reverse tunnel keeps both hardcoded endpoints in
+    # trento-web's test suite valid without touching the machine.
+    - name: Open reverse SMTP tunnel
+      shell: bash
+      env:
+        SSH_PRIVATE_KEY: ${{ inputs.ssh_private_key }}
+      run: |
+        set -euo pipefail
+
+        key_file="$(mktemp)"
+        echo "$SSH_PRIVATE_KEY" > "$key_file"
+        chmod 600 "$key_file"
+        echo "MAILPIT_SSH_KEY_FILE=$key_file" >> "$GITHUB_ENV"
+
+        ssh_opts=(
+          -i "$key_file"
+          -o StrictHostKeyChecking=no
+          -o UserKnownHostsFile=/dev/null
+          -o ExitOnForwardFailure=yes
+          -o ServerAliveInterval=15
+          -o ServerAliveCountMax=3
+        )
+
+        ssh -f -N "${ssh_opts[@]}" \
+          -R 127.0.0.1:1025:127.0.0.1:1025 \
+          "${{ inputs.ssh_username }}@${{ inputs.host_fqdn }}"
+
+        # Fail here and not inside Cypress: the Erlang mailer resolves
+        # "localhost" and may try ::1 before 127.0.0.1.
+        ssh "${ssh_opts[@]}" "${{ inputs.ssh_username }}@${{ inputs.host_fqdn }}" \
+          'timeout 5 bash -c "</dev/tcp/127.0.0.1/1025"'
