@@ -333,9 +333,10 @@ jobs:
       - name: Install web assets dependencies
         run: cd trento-web/assets && npm ci
 
-      # The installation phase deploys a real agent; clean it up before Cypress generates photofinish data to avoid conflicts during tests execution.
-      - name: Clean up Trento agent from host
-        uses: ./.github/actions/cleanup-trento-agent
+      # The installation phase deploys a real agent; clean it up and restart trento-web
+      # before Cypress generates photofinish data to avoid database connection exhaustion.
+      - name: Clean up Trento agent from host & restart Trento web
+        uses: ./.github/actions/cleanup-trento-agent-and-restart-web
         with:
           host_fqdn: ${{ matrix.host }}
           ssh_username: ${{ env.SSH_USERNAME }}

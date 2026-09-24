@@ -1,5 +1,5 @@
-name: 'Clean up Trento agent'
-description: 'Stop trento-agent on a host and deregister its leftover host from Trento'
+name: 'Clean up Trento agent & restart Trento web'
+description: 'Stop trento-agent, deregister leftover host from Trento, and restart trento-web to release database connections'
 
 inputs:
   host_fqdn:
@@ -80,3 +80,32 @@ runs:
 
         echo "Failed to deregister host ${host_id}: after retries" >&2
         exit 1
+
+    - name: Restart Trento web
+      uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+      with:
+        host: ${{ inputs.host_fqdn }}
+        username: ${{ inputs.ssh_username }}
+        key: ${{ inputs.ssh_private_key }}
+        script: |
+          set -euo pipefail
+
+          sudo systemctl restart trento-web
+
+          for url in \
+            "https://${{ inputs.host_fqdn }}/api/readyz" \
+            "https://${{ inputs.host_fqdn }}/api/healthz"; do
+            for attempt in $(seq 1 60); do
+              if curl -kfsS "$url" >/dev/null 2>&1; then
+                echo "OK $url"
+                break
+              fi
+
+              if [[ "$attempt" == "60" ]]; then
+                echo "Health check timed out for $url" >&2
+                exit 1
+              fi
+
+              sleep 2
+            done
+          done
