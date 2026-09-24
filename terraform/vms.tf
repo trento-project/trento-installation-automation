@@ -47,7 +47,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
   name                  = each.value.name
   resource_group_name   = data.azurerm_resource_group.rg.name
   location              = data.azurerm_resource_group.rg.location
-  size                  = "Standard_DS1_v2"
+  size                  = var.vm_size
   admin_username        = var.ssh_user
   network_interface_ids = [azurerm_network_interface.nic[each.key].id]
   tags                  = local.common_tags

@@ -38,3 +38,9 @@ variable "environment_suffix" {
     error_message = "The environment_suffix must be lowercase alphanumeric or hyphens, and must not end with a hyphen."
   }
 }
+
+variable "vm_size" {
+  type        = string
+  description = "Azure VM size for Trento servers"
+  default     = "Standard_D2s_v5"
+}
