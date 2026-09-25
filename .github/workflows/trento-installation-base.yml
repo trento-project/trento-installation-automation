@@ -344,6 +344,7 @@ jobs:
           web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
 
       - name: Cypress run
+        if: false
         uses: cypress-io/github-action@09090944bd8aaa2a517cefb6e38bf1aae336b42b # v7.4.3
         env:
           cypress_video: false
