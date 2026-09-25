@@ -43,7 +43,7 @@ runs:
   using: 'composite'
   steps:
     - name: Parse tool versions
-      uses: endorama/asdf-parse-tool-versions@e60863920ff5af9bf1c794ffbaaef91384b07eed # v1.6.0
+      uses: endorama/asdf-parse-tool-versions@115a5df5884438dfd08a3a21e9c9efdf06dd907e # v1.7.0
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
