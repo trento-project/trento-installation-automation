@@ -30,6 +30,10 @@ on:
         description: 'Install rolling version of packages'
         type: boolean
         default: false
+      provision_only:
+        description: 'Provision infrastructure only (skip Trento deployment)'
+        type: boolean
+        default: false
       skip_cypress:
         description: 'Skip the Cypress end-to-end tests'
         type: boolean
@@ -246,6 +250,7 @@ jobs:
           azure_region: ${{ steps.get-hosts.outputs.location }}
 
       - name: Run Ansible Trento playbook
+        if: ${{ !inputs.provision_only }}
         uses: ./.github/actions/run-ansible-trento-playbook
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
@@ -253,11 +258,13 @@ jobs:
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
       - name: Verify Trento instances healthcheck endpoints
+        if: ${{ !inputs.provision_only }}
         uses: ./.github/actions/verify-trento-health
         with:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
 
       - name: Verify Trento supportconfig plugin
+        if: ${{ !inputs.provision_only }}
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
@@ -283,7 +290,7 @@ jobs:
   test:
     name: Run Cypress tests (${{ matrix.host }})
     needs: provision-and-deploy
-    if: ${{ needs.provision-and-deploy.result == 'success' && !inputs.skip_cypress }}
+    if: ${{ needs.provision-and-deploy.result == 'success' && !inputs.provision_only && !inputs.skip_cypress }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false

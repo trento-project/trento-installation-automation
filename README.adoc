@@ -150,11 +150,12 @@ The manual workflows expose one boolean input per supported version so you can c
 . Click **Run workflow**
 . Select the SLES versions you want to deploy to
 . Optionally enable `install_rolling` to install packages from the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS] instead of Azure Blob Storage
+. Optionally enable `provision_only` to provision and prepare the infrastructure without deploying Trento (useful for testing playbook changes locally)
 . Optionally enable `skip_cypress` to stop after deployment and health verification
 . Optionally set `web_ref` to the branch, tag or commit of https://github.com/trento-project/web[trento-project/web] the Cypress tests are taken from
 . Click **Run workflow**
 
-The workflow always recreates the Terraform-managed infrastructure before installing Trento. After installation, Cypress end-to-end tests run against each machine unless `skip_cypress` is enabled. If Cypress fails, screenshots are uploaded as workflow artifacts.
+The workflow always recreates the Terraform-managed infrastructure before installing Trento. When `provision_only` is enabled, the workflow prepares the machines (SUSE registration, package repositories, test certificates, and inventory) but stops before running the Trento Ansible playbook and tests. Otherwise, after installation, Cypress end-to-end tests run against each machine unless `skip_cypress` is enabled. If Cypress fails, screenshots are uploaded as workflow artifacts.
 
 Two behaviors are worth knowing before launching a run:
 

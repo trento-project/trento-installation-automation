@@ -30,6 +30,10 @@ on:
         description: 'Install rolling version of packages'
         type: boolean
         default: false
+      provision_only:
+        description: 'Provision infrastructure only (skip Trento deployment)'
+        type: boolean
+        default: false
       skip_cypress:
         description: 'Skip the Cypress end-to-end tests'
         type: boolean
@@ -54,6 +58,7 @@ jobs:
       sles_15_sp7: ${{ inputs.sles_15_sp7 }}
       sles_16_0: ${{ inputs.sles_16_0 }}
       install_rolling: ${{ inputs.install_rolling }}
+      provision_only: ${{ inputs.provision_only }}
       skip_cypress: ${{ inputs.skip_cypress }}
       cypress_spec: ${{ inputs.cypress_spec }}
       web_ref: ${{ inputs.web_ref }}
