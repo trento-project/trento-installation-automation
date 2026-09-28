@@ -23,6 +23,13 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     uses: ./.github/workflows/trento-installation-base.yml
     with:
+      # Action bumps only affect the runner, not the target OS. Test SLES 15 SP7
+      # as a CI sanity check (most widely adopted).
+      sles_15_sp4: &not_dependabot ${{ github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' }}
+      sles_15_sp5: *not_dependabot
+      sles_15_sp6: *not_dependabot
+      sles_15_sp7: true
+      sles_16_0: *not_dependabot
       install_rolling: true
       cypress_spec: '**/about.cy.js'
       destroy_after: true
