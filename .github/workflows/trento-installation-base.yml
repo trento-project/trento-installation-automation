@@ -447,14 +447,6 @@ jobs:
       - name: Install web assets dependencies
         run: cd trento-web/assets && npm ci
 
-      - name: Clean up Trento agent from host
-        uses: ./.github/actions/cleanup-trento-agent
-        with:
-          host_fqdn: ${{ matrix.host }}
-          ssh_username: ${{ env.SSH_USERNAME }}
-          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
-
       - name: Cypress run
         uses: cypress-io/github-action@09090944bd8aaa2a517cefb6e38bf1aae336b42b # v7.4.3
         env:
