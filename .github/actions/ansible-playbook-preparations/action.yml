@@ -20,6 +20,18 @@ inputs:
   azure_region:
     description: 'Azure region the machines live in, used to build their public FQDN'
     required: true
+  smtp_server:
+    description: 'SMTP server Trento web is enforced to send alerting emails to'
+    required: true
+  smtp_port:
+    description: 'SMTP port of the alerting SMTP server'
+    required: true
+  smtp_user:
+    description: 'SMTP username'
+    required: true
+  smtp_password:
+    description: 'SMTP password'
+    required: true
 
 runs:
   using: 'composite'
@@ -31,11 +43,15 @@ runs:
         SSH_PRIVATE_KEY: ${{ inputs.ssh_private_key }}
         WEB_ADMIN_PASSWORD: ${{ inputs.web_admin_password }}
         AZURE_REGION: ${{ inputs.azure_region }}
+        SMTP_SERVER: ${{ inputs.smtp_server }}
+        SMTP_PORT: ${{ inputs.smtp_port }}
+        SMTP_USER: ${{ inputs.smtp_user }}
+        SMTP_PASSWORD: ${{ inputs.smtp_password }}
       with:
         host: ${{ inputs.hosts_fqdn_csv }}
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
-        envs: SSH_USERNAME,SSH_PRIVATE_KEY,WEB_ADMIN_PASSWORD,AZURE_REGION
+        envs: SSH_USERNAME,SSH_PRIVATE_KEY,WEB_ADMIN_PASSWORD,AZURE_REGION,SMTP_SERVER,SMTP_PORT,SMTP_USER,SMTP_PASSWORD
         script: |
           set -e
 
@@ -104,6 +120,11 @@ runs:
                   wanda_postgres_password: "postgres"
                   rabbitmq_password: "admin"
                   web_admin_password: "$WEB_ADMIN_PASSWORD"
+                  web_enable_alerting: true
+                  web_smtp_server: "$SMTP_SERVER"
+                  web_smtp_port: $SMTP_PORT
+                  web_smtp_user: "$SMTP_USER"
+                  web_smtp_password: "$SMTP_PASSWORD"
                   supportutils_enabled: true
                   supportutils_package_name: "supportutils"
                   supportutils_plugin_package_name: "supportutils-plugin-trento"

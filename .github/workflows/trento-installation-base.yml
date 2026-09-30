@@ -56,6 +56,13 @@ env:
   AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
   SSH_USERNAME: cloudadmin
   PHOTOFINISH_VERSION: v1.4.2
+  BORE_VERSION: v0.6.0
+  # Public endpoint the Mailpit SMTP tunnel is published at. The Trento web
+  # instances are enforced to send alerting emails there.
+  MAILPIT_TUNNEL_HOST: bore.pub
+  MAILPIT_TUNNEL_PORT: 42025
+  MAILPIT_SMTP_USER: trentouser
+  MAILPIT_SMTP_PASSWORD: pass
 
 jobs:
   provision-and-deploy:
@@ -244,6 +251,10 @@ jobs:
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
           azure_region: ${{ steps.get-hosts.outputs.location }}
+          smtp_server: ${{ env.MAILPIT_TUNNEL_HOST }}
+          smtp_port: ${{ env.MAILPIT_TUNNEL_PORT }}
+          smtp_user: ${{ env.MAILPIT_SMTP_USER }}
+          smtp_password: ${{ env.MAILPIT_SMTP_PASSWORD }}
 
       - name: Run Ansible Trento playbook
         uses: ./.github/actions/run-ansible-trento-playbook
@@ -361,11 +372,126 @@ jobs:
           path: trento-web/test/e2e/cypress/screenshots/
           retention-days: 1
 
+  email-tests:
+    name: Run email Cypress tests (${{ matrix.host }})
+    needs:
+      - provision-and-deploy
+      - test
+    if: ${{ always() && needs.provision-and-deploy.result == 'success' && !inputs.skip_cypress }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        host: ${{ fromJson(needs.provision-and-deploy.outputs.hosts_json || '[]') }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout Trento Web tests
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: trento-project/web
+          path: trento-web
+          ref: ${{ inputs.web_ref }}
+
+      - name: Start Mailpit
+        env:
+          TRENTO_SMTP_AUTHENTICATED: "true"
+          TRENTO_SMTP_INSECURE: "true"
+        run: docker compose -f trento-web/docker-compose.yaml up -d mailpit
+
+      - name: Expose Mailpit SMTP port
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/ekzhang/bore/releases/download/${BORE_VERSION}/bore-${BORE_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin bore
+          nohup bore local 1025 --to "$MAILPIT_TUNNEL_HOST" --port "$MAILPIT_TUNNEL_PORT" > bore.log 2>&1 &
+          for _ in $(seq 1 30); do
+            if grep -q "listening at" bore.log; then exit 0; fi
+            sleep 1
+          done
+          cat bore.log >&2
+          exit 1
+
+      - name: Trust test CA certificate
+        run: |
+          set -euo pipefail
+          CA_CERT_FILE="/usr/local/share/ca-certificates/trento-ca.crt"
+          sudo mkdir -p /usr/local/share/ca-certificates/
+          sudo tee "$CA_CERT_FILE" > /dev/null <<'EOF_CA_CRT'
+          ${{ vars.TRENTO_TEST_CA_CRT }}
+          EOF_CA_CRT
+          openssl x509 -in "$CA_CERT_FILE" -noout > /dev/null
+          sudo update-ca-certificates
+          echo "NODE_EXTRA_CA_CERTS=$CA_CERT_FILE" >> "$GITHUB_ENV"
+
+      - name: Install photofinish
+        uses: jaxxstorm/action-install-gh-release@25e24d2d23ae098373794ef1d6faecb48ee52da8 # v3.0.0
+        with:
+          repo: trento-project/photofinish
+          tag: ${{ env.PHOTOFINISH_VERSION }}
+          cache: enable
+          chmod: 0755
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get photofinish path
+        id: photofinish-path
+        run: |
+          set -euo pipefail
+          photofinish_path="$(command -v photofinish)"
+          echo "path=$photofinish_path" >> "$GITHUB_OUTPUT"
+
+      - name: Install web assets dependencies
+        run: cd trento-web/assets && npm ci
+
+      - name: Clean up Trento agent from host
+        uses: ./.github/actions/cleanup-trento-agent
+        with:
+          host_fqdn: ${{ matrix.host }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
+
+      - name: Cypress run
+        uses: cypress-io/github-action@09090944bd8aaa2a517cefb6e38bf1aae336b42b # v7.4.3
+        env:
+          cypress_video: false
+        with:
+          working-directory: trento-web/test/e2e
+          wait-on-timeout: 30
+          config: baseUrl=https://${{ matrix.host }},retries=2
+          expose: photofinish_binary=${{ steps.photofinish-path.outputs.path }},wanda_mode=prod,web_mode=prod,ALERTING_TESTS=true
+          spec: cypress/e2e/alerting.cy.js
+
+      - name: Upload cypress test screenshots
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: e2e-email-screenshots-${{ matrix.host }}
+          path: trento-web/test/e2e/cypress/screenshots/
+          retention-days: 1
+
+      - name: Show Mailpit and tunnel logs
+        if: failure()
+        run: |
+          docker compose -f trento-web/docker-compose.yaml logs mailpit
+          cat bore.log
+
+      - name: Stop Mailpit and tunnel
+        if: always()
+        run: |
+          pkill bore || true
+          docker compose -f trento-web/docker-compose.yaml down -v
+
   cleanup:
     name: Destroy infrastructure
     needs:
       - provision-and-deploy
       - test
+      - email-tests
     if: ${{ always() && inputs.destroy_after }}
     uses: ./.github/workflows/terraform-destroy.yml
     secrets: inherit
