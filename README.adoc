@@ -62,7 +62,7 @@ Each version directory should contain:
 * `trento-agent-*.rpm` - Trento agent
 * `ansible-trento-*.rpm` - Ansible collection for Trento installation
 
-NOTE: When `install_rolling` is disabled, packages available in Azure Blob Storage are configured with the highest repository priority, and any package missing from it is installed from the official SUSE release sources instead. See <<Choosing which packages to test>> for how to use this to validate a partial release. When `install_rolling` is enabled, the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS] is configured with the highest repository priority and Azure Blob Storage is skipped.
+NOTE: When `package_source` is set to `blob_storage` (the default), packages available in Azure Blob Storage are configured with the highest repository priority, and any package missing from it is installed from the official SUSE release sources instead. See <<Choosing which packages to test>> for how to use this to validate a partial release. When `package_source` is set to `rolling`, the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS] is configured with the highest repository priority and Azure Blob Storage is skipped.
 
 === GitHub Configuration
 
@@ -149,13 +149,25 @@ The manual workflows expose one boolean input per supported version so you can c
 . Go to **Actions** > **Trento Installation Tests**
 . Click **Run workflow**
 . Select the SLES versions you want to deploy to
-. Optionally enable `install_rolling` to install packages from the Trento rolling repository from https://build.opensuse.org/project/show/devel:sap:trento:factory[OBS] instead of Azure Blob Storage
-. Optionally enable `provision_only` to provision and prepare the infrastructure without deploying Trento (useful for testing playbook changes locally)
+. Select the `package_source` to configure on machines (`blob_storage` or `rolling`)
 . Optionally enable `skip_cypress` to stop after deployment and health verification
+. Optionally set `cypress_spec` to the Cypress spec pattern to run (leave empty for the full suite)
 . Optionally set `web_ref` to the branch, tag or commit of https://github.com/trento-project/web[trento-project/web] the Cypress tests are taken from
 . Click **Run workflow**
 
-The workflow always recreates the Terraform-managed infrastructure before installing Trento. When `provision_only` is enabled, the workflow prepares the machines (SUSE registration, package repositories, test certificates, and inventory) but stops before running the Trento Ansible playbook and tests. Otherwise, after installation, Cypress end-to-end tests run against each machine unless `skip_cypress` is enabled. If Cypress fails, screenshots are uploaded as workflow artifacts.
+The workflow always recreates the Terraform-managed infrastructure before installing Trento. After installation, Cypress end-to-end tests run against each machine unless `skip_cypress` is enabled. If Cypress fails, screenshots are uploaded as workflow artifacts.
+
+=== Provisioning Infrastructure Only
+
+To provision and configure the virtual machines without deploying Trento (useful for testing playbook changes locally or inspecting the environment):
+
+. Go to **Actions** > **Provision Infrastructure**
+. Click **Run workflow**
+. Select the SLES versions you want to provision
+. Select the `package_source` to configure on machines (`blob_storage` or `rolling`)
+. Click **Run workflow**
+
+The workflow recreates the Terraform-managed infrastructure, registers SUSE machines and activates modules, configures the selected package repositories, generates test SSL certificates, and prepares the self-targeting Ansible inventory in `/etc/ansible/trento-inventory.yml`, leaving the machines ready for manual inspection or running Ansible playbooks.
 
 Two behaviors are worth knowing before launching a run:
 
@@ -177,7 +189,7 @@ IMPORTANT: Deleting the leftover RPMs is mandatory. The blob-backed repository i
 
 For example, to validate a `trento-web` release candidate on SLES 15 SP6, leave only `trento-web-*.rpm` in the `15/6/` directory. The remaining packages, `trento-wanda`, `trento-checks`, `trento-agent` and `ansible-trento`, are then installed from the official SUSE release sources.
 
-Every RPM in the container, `ansible-trento-*.rpm` included, is served from a local repository built from the container contents. If the version directory is missing or contains no RPMs, every package is installed from the official SUSE release sources. Enabling `install_rolling` ignores Azure Blob Storage entirely and installs everything from the Trento rolling repository.
+Every RPM in the container, `ansible-trento-*.rpm` included, is served from a local repository built from the container contents. If the version directory is missing or contains no RPMs, every package is installed from the official SUSE release sources. Enabling `package_source: rolling` ignores Azure Blob Storage entirely and installs everything from the Trento rolling repository.
 
 ==== SLES 15 SP4 and the Ansible collection
 

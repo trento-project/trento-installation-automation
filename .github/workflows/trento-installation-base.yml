@@ -26,10 +26,10 @@ on:
         description: 'Deploy to SLES 16.0'
         type: boolean
         default: true
-      install_rolling:
-        description: 'Install rolling version of packages'
-        type: boolean
-        default: false
+      package_source:
+        description: 'Package repository source to configure on machines (blob_storage or rolling)'
+        type: string
+        default: 'blob_storage'
       provision_only:
         description: 'Provision infrastructure only (skip Trento deployment)'
         type: boolean
@@ -226,7 +226,7 @@ jobs:
           azure_blob_storage: ${{ env.AZURE_BLOB_STORAGE }}
           azure_blob_storage_container: ${{ env.AZURE_BLOB_STORAGE_CONTAINER }}
           azure_blob_storage_sas_token: ${{ secrets.AZURE_BLOB_STORAGE_SAS_TOKEN }}
-          install_rolling: ${{ inputs.install_rolling }}
+          package_source: ${{ inputs.package_source }}
 
       - name: Setup test CA
         id: setup-test-ca

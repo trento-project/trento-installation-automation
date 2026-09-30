@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: SUSE LLC
 # SPDX-License-Identifier: Apache-2.0
 
-name: Trento Installation Tests
+name: Provision Infrastructure
 
 on:
   workflow_dispatch:
@@ -33,22 +33,10 @@ on:
         options:
           - 'blob_storage'
           - 'rolling'
-      skip_cypress:
-        description: 'Skip the Cypress end-to-end tests'
-        type: boolean
-        default: false
-      cypress_spec:
-        description: 'Cypress spec pattern to run. Leave empty to run the full suite.'
-        type: string
-        default: ''
-      web_ref:
-        description: 'Branch, tag or commit of trento-project/web to take the Cypress tests from. Leave empty to use its default branch.'
-        type: string
-        default: ''
 
 jobs:
-  installation-tests:
-    name: Run installation tests
+  provision:
+    name: Provision infrastructure
     uses: ./.github/workflows/trento-installation-base.yml
     with:
       sles_15_sp4: ${{ inputs.sles_15_sp4 }}
@@ -57,7 +45,5 @@ jobs:
       sles_15_sp7: ${{ inputs.sles_15_sp7 }}
       sles_16_0: ${{ inputs.sles_16_0 }}
       package_source: ${{ inputs.package_source }}
-      skip_cypress: ${{ inputs.skip_cypress }}
-      cypress_spec: ${{ inputs.cypress_spec }}
-      web_ref: ${{ inputs.web_ref }}
+      provision_only: true
     secrets: inherit
