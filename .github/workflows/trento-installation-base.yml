@@ -379,6 +379,8 @@ jobs:
       - test
     if: ${{ always() && needs.provision-and-deploy.result == 'success' && !inputs.skip_cypress }}
     runs-on: ubuntu-24.04
+    env:
+      COMPOSE_FILE: trento-web/docker-compose.yaml:mailpit-auth.override.yaml
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -396,11 +398,19 @@ jobs:
           path: trento-web
           ref: ${{ inputs.web_ref }}
 
+      # The web compose file wraps MP_SMTP_AUTH in literal quotes, so Mailpit
+      # would reject the credentials; override it.
       - name: Start Mailpit
         env:
-          TRENTO_SMTP_AUTHENTICATED: "true"
           TRENTO_SMTP_INSECURE: "true"
-        run: docker compose -f trento-web/docker-compose.yaml up -d mailpit
+        run: |
+          cat > mailpit-auth.override.yaml <<EOF_OVERRIDE
+          services:
+            mailpit:
+              environment:
+                MP_SMTP_AUTH: ${MAILPIT_SMTP_USER}:${MAILPIT_SMTP_PASSWORD}
+          EOF_OVERRIDE
+          docker compose up -d mailpit
 
       - name: Expose Mailpit SMTP port
         run: |
@@ -469,14 +479,14 @@ jobs:
       - name: Show Mailpit and tunnel logs
         if: failure()
         run: |
-          docker compose -f trento-web/docker-compose.yaml logs mailpit
+          docker compose logs mailpit
           cat bore.log
 
       - name: Stop Mailpit and tunnel
         if: always()
         run: |
           pkill bore || true
-          docker compose -f trento-web/docker-compose.yaml down -v
+          docker compose down -v
 
   cleanup:
     name: Destroy infrastructure
