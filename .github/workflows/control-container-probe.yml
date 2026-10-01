@@ -24,7 +24,6 @@ jobs:
           - registry.suse.com/bci/bci-base:15.6
           - registry.suse.com/bci/bci-base:15.7
           - registry.suse.com/bci/bci-base:16.0
-          - registry.suse.com/suse/sle15:15.7
     env:
       REGISTRATION_CODE: ${{ secrets.SUSE_REGISTRATION_CODE }}
       REGISTRATION_EMAIL: ${{ secrets.SUSE_REGISTRATION_EMAIL }}
@@ -56,6 +55,10 @@ jobs:
           fi
           zypper -n addrepo "$REPO_URL"
           zypper -n modifyrepo --priority 1 devel_sap_trento_factory
+          if [ "${VERSION_ID%%.*}" != "16" ]; then
+            zypper -n addrepo "https://download.opensuse.org/repositories/devel:/sap:/trento:/factory/SLES15-SP5/" devel_sap_trento_factory_ansible
+            zypper -n modifyrepo --priority 1 devel_sap_trento_factory_ansible
+          fi
           zypper -n --gpg-auto-import-keys refresh
 
       - name: Install ansible-trento
