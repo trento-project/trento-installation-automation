@@ -88,12 +88,6 @@ runs:
             PYTHON_INTERPRETER_LINE='ansible_python_interpreter: "/usr/bin/python3"'
           fi
 
-          # SP4 can't install ansible-linux-system-roles, and it is registered already
-          SUSECONNECT_LINE=""
-          if [[ "$CURRENT_HOSTNAME" == *sp4* ]]; then
-            SUSECONNECT_LINE='enable_suseconnect: false'
-          fi
-
           # Generate the inventory file
           sudo tee /etc/ansible/trento-inventory.yml > /dev/null << EOF
           all:
