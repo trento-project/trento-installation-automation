@@ -43,6 +43,21 @@ jobs:
       - name: Register
         run: SUSEConnect -r "$REGISTRATION_CODE" -e "$REGISTRATION_EMAIL"
 
+      - name: Search Ansible packages in registered repos
+        run: zypper -n se -s ansible ansible-core ansible-linux-system-roles ansible-trento || true
+
+      - name: Add rolling repository
+        run: |
+          source /etc/os-release
+          if [ "${VERSION_ID%%.*}" = "16" ]; then
+            REPO_URL="https://download.opensuse.org/repositories/devel:/sap:/trento:/factory/SLES16.0/devel:sap:trento:factory.repo"
+          else
+            REPO_URL="https://download.opensuse.org/repositories/devel:sap:trento:factory/SLES15-Trento-SP3-SP7/devel:sap:trento:factory.repo"
+          fi
+          zypper -n addrepo "$REPO_URL"
+          zypper -n modifyrepo --priority 1 devel_sap_trento_factory
+          zypper -n --gpg-auto-import-keys refresh
+
       - name: Install ansible-trento
         run: zypper -n --gpg-auto-import-keys in -y --auto-agree-with-licenses ansible-trento
 
