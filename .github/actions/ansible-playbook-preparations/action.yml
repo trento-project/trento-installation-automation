@@ -101,7 +101,7 @@ runs:
               trento_hosts:
                 vars:
                   ${PYTHON_INTERPRETER_LINE}
-                  ${SUSECONNECT_LINE}
+                  $([[ "$CURRENT_HOSTNAME" == *sp4* ]] && echo "enable_suseconnect: false")
                   provision_prometheus: true
                   prometheus_enable_remote_write_receiver: false
                   provision_proxy: true
