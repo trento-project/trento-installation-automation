@@ -182,6 +182,8 @@ Every RPM in the container, `ansible-trento-*.rpm` included, is served from a lo
 
 `ansible-trento` is not officially released for SLES 15 SP4, so release candidate artifacts never include an SP4 build of it. Trento can still be installed on SP4, because the SP4 machine does not use the distribution Ansible. Instead, it creates a Python virtual environment and installs `ansible` 9 with `pip`, and configures it to use the collection provided by the RPM. The collection therefore works regardless of which service pack it was built for.
 
+Recent `ansible-trento` builds require `ansible-linux-system-roles`, which SP4 does not provide. On SP4 the RPM is installed with `rpm --nodeps`, the `suseconnect` role is cloned from Git into a local roles path, and `enable_suseconnect` is set to `false`, because the machines are registered beforehand.
+
 When preparing a run that includes SP4, upload the SP5 `ansible-trento` release candidate to the `15/4/` directory alongside the rest of the SP4 packages.
 
 NOTE: This workaround only exists while SLES 15 SP4 is supported, and can be removed once support ends at the end of 2026.

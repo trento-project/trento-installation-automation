@@ -40,12 +40,22 @@ runs:
         script: |
           set -e
 
-          INSTALL_ANSIBLE_PACKAGE_CMD="sudo zypper --non-interactive --gpg-auto-import-keys install -y --auto-agree-with-licenses ansible-trento"
-
           # Extract SLES version from /etc/os-release (e.g., VERSION_ID="15.4")
           source /etc/os-release
           SLES_MAJOR_VERSION="${VERSION_ID%%.*}"
           SP_VERSION="${VERSION_ID##*.}"
+
+          # SP4 has no ansible-linux-system-roles, so skip the dependency check
+          if [ "$VERSION_ID" = "15.4" ]; then
+            install_ansible_package() {
+              sudo zypper --non-interactive --gpg-auto-import-keys download ansible-trento
+              sudo sh -c 'rpm -Uvh --nodeps /var/cache/zypp/packages/*/*/ansible-trento-*.rpm'
+            }
+          else
+            install_ansible_package() {
+              sudo zypper --non-interactive --gpg-auto-import-keys install -y --auto-agree-with-licenses ansible-trento
+            }
+          fi
 
           # When install_rolling is true, configure the OBS rolling repository and skip the Azure Blob repository setup.
           if [ "${{ inputs.install_rolling }}" = "true" ]; then
@@ -64,7 +74,7 @@ runs:
             fi
             sudo zypper --non-interactive --gpg-auto-import-keys refresh
 
-            $INSTALL_ANSIBLE_PACKAGE_CMD
+            install_ansible_package
             exit 0
           fi
 
@@ -99,4 +109,4 @@ runs:
 
           # The local repository has priority 1, so this picks the ansible-trento
           # from blob storage when it is there and the official one when it is not.
-          $INSTALL_ANSIBLE_PACKAGE_CMD
+          install_ansible_package

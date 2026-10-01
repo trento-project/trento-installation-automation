@@ -47,4 +47,12 @@ runs:
             export ANSIBLE_ROLES_PATH=/usr/share/ansible/roles
           fi
 
+          # SP4 has no ansible-linux-system-roles, but the playbooks still need the role to exist
+          if [[ "$CURRENT_HOSTNAME" == *sp4* ]]; then
+            sudo zypper --non-interactive install -y git-core
+            rm -rf .ansible-roles
+            git clone --quiet --depth 1 --branch 1.0.2-suse https://github.com/SUSE/ansible-suseconnect.git .ansible-roles/suseconnect
+            export ANSIBLE_ROLES_PATH="$ANSIBLE_ROLES_PATH:$PWD/.ansible-roles"
+          fi
+
           ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i "$INVENTORY_FILE" suse.trento.site
