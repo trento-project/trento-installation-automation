@@ -30,7 +30,7 @@ jobs:
       sles_15_sp6: *not_dependabot
       sles_15_sp7: true
       sles_16_0: *not_dependabot
-      install_rolling: true
+      package_source: 'rolling'
       cypress_spec: '**/about.cy.js'
       destroy_after: true
     secrets: inherit
