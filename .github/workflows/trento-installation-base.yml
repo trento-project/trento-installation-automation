@@ -46,6 +46,14 @@ on:
         description: 'Branch, tag or commit of trento-project/web to take the Cypress tests from. Leave empty to use its default branch.'
         type: string
         default: ''
+      smtp_server:
+        description: 'SMTP server host for Trento alerting. Leave empty to disable alerting.'
+        type: string
+        default: ''
+      smtp_port:
+        description: 'SMTP server port'
+        type: string
+        default: '1025'
       destroy_after:
         description: 'Destroy Terraform-managed infrastructure after the workflow finishes'
         type: boolean
@@ -248,6 +256,8 @@ jobs:
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
           azure_region: ${{ steps.get-hosts.outputs.location }}
+          smtp_server: ${{ inputs.smtp_server }}
+          smtp_port: ${{ inputs.smtp_port }}
 
       - name: Run Ansible Trento playbook
         if: ${{ !inputs.provision_only }}

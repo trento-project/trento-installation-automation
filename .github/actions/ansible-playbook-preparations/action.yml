@@ -20,6 +20,14 @@ inputs:
   azure_region:
     description: 'Azure region the machines live in, used to build their public FQDN'
     required: true
+  smtp_server:
+    description: 'SMTP server host for Trento alerting. Leave empty to disable alerting.'
+    required: false
+    default: ''
+  smtp_port:
+    description: 'SMTP server port'
+    required: false
+    default: '1025'
 
 runs:
   using: 'composite'
@@ -31,11 +39,13 @@ runs:
         SSH_PRIVATE_KEY: ${{ inputs.ssh_private_key }}
         WEB_ADMIN_PASSWORD: ${{ inputs.web_admin_password }}
         AZURE_REGION: ${{ inputs.azure_region }}
+        SMTP_SERVER: ${{ inputs.smtp_server }}
+        SMTP_PORT: ${{ inputs.smtp_port }}
       with:
         host: ${{ inputs.hosts_fqdn_csv }}
         username: ${{ inputs.ssh_username }}
         key: ${{ inputs.ssh_private_key }}
-        envs: SSH_USERNAME,SSH_PRIVATE_KEY,WEB_ADMIN_PASSWORD,AZURE_REGION
+        envs: SSH_USERNAME,SSH_PRIVATE_KEY,WEB_ADMIN_PASSWORD,AZURE_REGION,SMTP_SERVER,SMTP_PORT
         script: |
           set -e
 
@@ -94,6 +104,19 @@ runs:
             RABBITMQ_VERSION_LINE='rabbitmq_version: "4.1.5-160000.1.1"'
           fi
 
+          # Point Trento alerting to the given SMTP server (e.g. Mailpit)
+          ALERTING_VARS=""
+          if [[ -n "$SMTP_SERVER" ]]; then
+            ALERTING_VARS=$(printf '%s\n                  ' \
+              'web_enable_alerting: true' \
+              'web_alert_sender: "trento@example.com"' \
+              'web_alert_recipient: "qa@example.com"' \
+              "web_smtp_server: \"$SMTP_SERVER\"" \
+              "web_smtp_port: \"$SMTP_PORT\"" \
+              'web_smtp_user: "mailpit"' \
+              'web_smtp_password: "mailpit"')
+          fi
+
           # Generate the inventory file
           sudo tee /etc/ansible/trento-inventory.yml > /dev/null << EOF
           all:
@@ -103,6 +126,7 @@ runs:
                   ${PYTHON_INTERPRETER_LINE}
                   $([[ "$CURRENT_HOSTNAME" == *sp4* ]] && echo "enable_suseconnect: false")
                   ${RABBITMQ_VERSION_LINE}
+                  ${ALERTING_VARS}
                   provision_prometheus: true
                   prometheus_enable_remote_write_receiver: false
                   provision_proxy: true

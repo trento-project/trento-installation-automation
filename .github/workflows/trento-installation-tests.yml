@@ -45,6 +45,14 @@ on:
         description: 'Branch, tag or commit of trento-project/web to take the Cypress tests from. Leave empty to use its default branch.'
         type: string
         default: ''
+      smtp_server:
+        description: 'SMTP server host Trento alerting points to (e.g. a TCP tunnel to Mailpit). Leave empty to disable alerting.'
+        type: string
+        default: ''
+      smtp_port:
+        description: 'SMTP server port'
+        type: string
+        default: '1025'
 
 jobs:
   installation-tests:
@@ -60,4 +68,6 @@ jobs:
       skip_cypress: ${{ inputs.skip_cypress }}
       cypress_spec: ${{ inputs.cypress_spec }}
       web_ref: ${{ inputs.web_ref }}
+      smtp_server: ${{ inputs.smtp_server }}
+      smtp_port: ${{ inputs.smtp_port }}
     secrets: inherit
