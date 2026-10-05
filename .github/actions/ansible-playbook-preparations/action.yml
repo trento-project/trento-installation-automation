@@ -107,7 +107,7 @@ runs:
           # Point Trento alerting to the given SMTP server (e.g. Mailpit)
           ALERTING_VARS=""
           if [[ -n "$SMTP_SERVER" ]]; then
-            ALERTING_VARS=$(printf '%s\n                  ' \
+            ALERTING_VARS=$(printf '%s\n        ' \
               'web_enable_alerting: true' \
               'web_alert_sender: "trento@example.com"' \
               'web_alert_recipient: "qa@example.com"' \
