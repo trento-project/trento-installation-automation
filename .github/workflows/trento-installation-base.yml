@@ -35,7 +35,11 @@ on:
         type: boolean
         default: false
       skip_cypress:
-        description: 'Skip the Cypress end-to-end tests'
+        description: 'Skip Cypress full test suite'
+        type: boolean
+        default: false
+      skip_alerting_tests:
+        description: 'Skip the alerting Cypress jobs (cypress-alerting-from-env and cypress-alerting-from-ui)'
         type: boolean
         default: false
       cypress_spec:
@@ -60,6 +64,13 @@ env:
   AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
   SSH_USERNAME: cloudadmin
   PHOTOFINISH_VERSION: v1.4.2
+  # The Trento web instances are enforced to send alerting emails to
+  # localhost:1025, a reverse SSH tunnel to the Mailpit on the email tests runner.
+  MAILPIT_SMTP_HOST: localhost
+  MAILPIT_SMTP_PORT: 1025
+  # Must match the credentials hardcoded in the Trento web docker-compose.yaml.
+  MAILPIT_SMTP_USER: trentouser
+  MAILPIT_SMTP_PASSWORD: pass
 
 jobs:
   provision-and-deploy:
@@ -248,6 +259,10 @@ jobs:
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
           azure_region: ${{ steps.get-hosts.outputs.location }}
+          smtp_server: ${{ env.MAILPIT_SMTP_HOST }}
+          smtp_port: ${{ env.MAILPIT_SMTP_PORT }}
+          smtp_user: ${{ env.MAILPIT_SMTP_USER }}
+          smtp_password: ${{ env.MAILPIT_SMTP_PASSWORD }}
 
       - name: Run Ansible Trento playbook
         if: ${{ !inputs.provision_only }}
@@ -287,9 +302,40 @@ jobs:
               exit 1
             fi
 
-  test:
-    name: Run Cypress tests (${{ matrix.host }})
+  # The installation phase deploys a real agent; clean it up before any Cypress
+  # job generates photofinish data to avoid conflicts during tests execution.
+  cleanup-agent:
+    name: Clean up Trento agent (${{ matrix.host }})
     needs: provision-and-deploy
+    if: ${{ needs.provision-and-deploy.result == 'success' && !inputs.provision_only && (!inputs.skip_cypress || !inputs.skip_alerting_tests) }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        host: ${{ fromJson(needs.provision-and-deploy.outputs.hosts_json || '[]') }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Trust test CA certificate
+        uses: ./.github/actions/trust-runner-ca
+        with:
+          ca_cert: ${{ vars.TRENTO_TEST_CA_CRT }}
+
+      - name: Clean up Trento agent from host
+        uses: ./.github/actions/cleanup-trento-agent
+        with:
+          host_fqdn: ${{ matrix.host }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
+
+  cypress-full-suite:
+    name: Cypress Full Suite (${{ matrix.host }})
+    needs:
+      - provision-and-deploy
+      - cleanup-agent
     if: ${{ needs.provision-and-deploy.result == 'success' && !inputs.provision_only && !inputs.skip_cypress }}
     runs-on: ubuntu-24.04
     strategy:
@@ -307,72 +353,196 @@ jobs:
           repository: trento-project/web
           path: trento-web
           ref: ${{ inputs.web_ref }}
+          sparse-checkout: |
+            /assets/
+            /test/e2e/
+            /test/fixtures/
+            /.photofinish.toml
+            /docker-compose.yaml
+            /.tool-versions
+          sparse-checkout-cone-mode: false
 
-      - name: Trust test CA certificate
-        run: |
-          set -euo pipefail
-          CA_CERT_FILE="/usr/local/share/ca-certificates/trento-ca.crt"
-          sudo mkdir -p /usr/local/share/ca-certificates/
-          sudo tee "$CA_CERT_FILE" > /dev/null <<'EOF_CA_CRT'
-          ${{ vars.TRENTO_TEST_CA_CRT }}
-          EOF_CA_CRT
-          openssl x509 -in "$CA_CERT_FILE" -noout > /dev/null
-          sudo update-ca-certificates
-          echo "NODE_EXTRA_CA_CERTS=$CA_CERT_FILE" >> "$GITHUB_ENV"
-
-      - name: Install photofinish
-        uses: jaxxstorm/action-install-gh-release@25e24d2d23ae098373794ef1d6faecb48ee52da8 # v3.0.0
+      - name: Setup Cypress tests
+        id: setup-cypress-tests
+        uses: ./.github/actions/setup-cypress-tests
         with:
-          repo: trento-project/photofinish
-          tag: ${{ env.PHOTOFINISH_VERSION }}
-          cache: enable
-          chmod: 0755
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ca_cert: ${{ vars.TRENTO_TEST_CA_CRT }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          photofinish_version: ${{ env.PHOTOFINISH_VERSION }}
 
-      - name: Get photofinish path
-        id: photofinish-path
-        run: |
-          set -euo pipefail
-          photofinish_path="$(command -v photofinish)"
-          echo "path=$photofinish_path" >> "$GITHUB_OUTPUT"
-
-      - name: Install web assets dependencies
-        run: cd trento-web/assets && npm ci
-
-      # The installation phase deploys a real agent; clean it up before Cypress generates photofinish data to avoid conflicts during tests execution.
-      - name: Clean up Trento agent from host
-        uses: ./.github/actions/cleanup-trento-agent
+      - name: Run Cypress tests
+        uses: ./.github/actions/run-cypress-tests
         with:
-          host_fqdn: ${{ matrix.host }}
+          host: ${{ matrix.host }}
+          photofinish_path: ${{ steps.setup-cypress-tests.outputs.photofinish_path }}
+          expose: wanda_mode=prod,web_mode=prod
+          spec: ${{ inputs.cypress_spec }}
+          screenshots_artifact_name: e2e-screenshots-${{ matrix.host }}
+
+  cypress-alerting-from-env:
+    name: Cypress Alerting from Env (${{ matrix.host }})
+    needs:
+      - provision-and-deploy
+      - cleanup-agent
+      - cypress-full-suite
+    if: ${{ !cancelled() && needs.provision-and-deploy.result == 'success' && needs.cleanup-agent.result == 'success' && !inputs.provision_only && !inputs.skip_alerting_tests }}
+    runs-on: ubuntu-24.04
+    env:
+      COMPOSE_FILE: trento-web/docker-compose.yaml
+    strategy:
+      fail-fast: false
+      matrix:
+        host: ${{ fromJson(needs.provision-and-deploy.outputs.hosts_json || '[]') }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout Trento Web tests
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: trento-project/web
+          path: trento-web
+          ref: ${{ inputs.web_ref }}
+          sparse-checkout: |
+            /assets/
+            /test/e2e/
+            /test/fixtures/
+            /.photofinish.toml
+            /docker-compose.yaml
+            /.tool-versions
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Mailpit tunnel
+        uses: ./.github/actions/setup-mailpit-tunnel
+        with:
+          host: ${{ matrix.host }}
           ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
-          web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
+          smtp_port: ${{ env.MAILPIT_SMTP_PORT }}
+          ca_cert: ${{ vars.TRENTO_TEST_CA_CRT }}
+          ca_key: ${{ secrets.TRENTO_TEST_CA_KEY }}
 
-      - name: Cypress run
-        uses: cypress-io/github-action@01e3b659a495b41649cdd0aa82e1d1624e26520b # v7.4.4
-        env:
-          cypress_video: false
+      - name: Setup Cypress tests
+        id: setup-cypress-tests
+        uses: ./.github/actions/setup-cypress-tests
         with:
-          working-directory: trento-web/test/e2e
-          wait-on-timeout: 30
-          config: baseUrl=https://${{ matrix.host }},retries=2
-          expose: photofinish_binary=${{ steps.photofinish-path.outputs.path }},wanda_mode=prod,web_mode=prod
-          spec: ${{ inputs.cypress_spec }}
+          ca_cert: ${{ vars.TRENTO_TEST_CA_CRT }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          photofinish_version: ${{ env.PHOTOFINISH_VERSION }}
 
-      - name: Upload cypress test screenshots
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Run Cypress tests
+        uses: ./.github/actions/run-cypress-tests
+        with:
+          host: ${{ matrix.host }}
+          photofinish_path: ${{ steps.setup-cypress-tests.outputs.photofinish_path }}
+          expose: wanda_mode=prod,web_mode=prod,ALERTING_TESTS=true
+          spec: cypress/e2e/alerting.cy.js
+          screenshots_artifact_name: e2e-alerting-env-screenshots-${{ matrix.host }}
+
+      - name: Show Mailpit and tunnel logs
         if: failure()
+        run: |
+          docker compose logs mailpit
+          cat tunnel.log
+
+  cypress-alerting-from-ui:
+    name: Cypress Alerting from UI (${{ matrix.host }})
+    needs:
+      - provision-and-deploy
+      - cleanup-agent
+      - cypress-full-suite
+      - cypress-alerting-from-env
+    if: ${{ !cancelled() && needs.provision-and-deploy.result == 'success' && needs.cleanup-agent.result == 'success' && !inputs.provision_only && !inputs.skip_alerting_tests }}
+    runs-on: ubuntu-24.04
+    env:
+      COMPOSE_FILE: trento-web/docker-compose.yaml
+    strategy:
+      fail-fast: false
+      matrix:
+        host: ${{ fromJson(needs.provision-and-deploy.outputs.hosts_json || '[]') }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout Trento Web tests
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          name: e2e-screenshots-${{ matrix.host }}
-          path: trento-web/test/e2e/cypress/screenshots/
-          retention-days: 1
+          repository: trento-project/web
+          path: trento-web
+          ref: ${{ inputs.web_ref }}
+          sparse-checkout: |
+            /assets/
+            /test/e2e/
+            /test/fixtures/
+            /.photofinish.toml
+            /docker-compose.yaml
+            /.tool-versions
+          sparse-checkout-cone-mode: false
+
+      - name: Restart Trento Web without alerting environment
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        with:
+          host: ${{ matrix.host }}
+          username: ${{ env.SSH_USERNAME }}
+          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          script: |
+            set -euo pipefail
+
+            sudo sed -i '/^\(ENABLE_ALERTING\|SMTP_SERVER\|SMTP_PORT\|SMTP_USER\|SMTP_PASSWORD\|ALERT_SENDER\|ALERT_RECIPIENT\)=/d' /etc/trento/trento-web
+            sudo systemctl restart trento-web
+
+            for _ in $(seq 1 30); do
+              if curl -fsS http://localhost:4000/api/healthz > /dev/null; then
+                exit 0
+              fi
+              sleep 2
+            done
+
+            sudo systemctl status trento-web --no-pager || true
+            exit 1
+
+      - name: Setup Mailpit tunnel
+        uses: ./.github/actions/setup-mailpit-tunnel
+        with:
+          host: ${{ matrix.host }}
+          ssh_username: ${{ env.SSH_USERNAME }}
+          ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          smtp_port: ${{ env.MAILPIT_SMTP_PORT }}
+          ca_cert: ${{ vars.TRENTO_TEST_CA_CRT }}
+          ca_key: ${{ secrets.TRENTO_TEST_CA_KEY }}
+
+      - name: Setup Cypress tests
+        id: setup-cypress-tests
+        uses: ./.github/actions/setup-cypress-tests
+        with:
+          ca_cert: ${{ vars.TRENTO_TEST_CA_CRT }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          photofinish_version: ${{ env.PHOTOFINISH_VERSION }}
+
+      - name: Run Cypress tests
+        uses: ./.github/actions/run-cypress-tests
+        with:
+          host: ${{ matrix.host }}
+          photofinish_path: ${{ steps.setup-cypress-tests.outputs.photofinish_path }}
+          expose: wanda_mode=prod,web_mode=prod,ALERTING_DB_TESTS=true,ALERTING_TESTS=true
+          spec: cypress/e2e/alerting.cy.js
+          screenshots_artifact_name: e2e-alerting-ui-screenshots-${{ matrix.host }}
+
+      - name: Show Mailpit and tunnel logs
+        if: failure()
+        run: |
+          docker compose logs mailpit
+          cat tunnel.log
 
   cleanup:
     name: Destroy infrastructure
     needs:
       - provision-and-deploy
-      - test
+      - cypress-full-suite
+      - cypress-alerting-from-env
+      - cypress-alerting-from-ui
     if: ${{ always() && inputs.destroy_after }}
     uses: ./.github/workflows/terraform-destroy.yml
     secrets: inherit
