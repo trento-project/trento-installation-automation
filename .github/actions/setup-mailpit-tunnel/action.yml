@@ -1,0 +1,83 @@
+name: 'Setup Mailpit tunnel'
+description: 'Start Mailpit on the runner and expose its SMTP port to a Trento host through a reverse SSH tunnel'
+
+inputs:
+  host:
+    description: 'Trento host FQDN'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+  ssh_private_key:
+    description: 'SSH private key content'
+    required: true
+  smtp_port:
+    description: 'Port opened on the Trento host and forwarded to the runner Mailpit'
+    required: true
+  ca_cert:
+    description: 'Test CA certificate (PEM) used to sign the Mailpit TLS certificate'
+    required: true
+  ca_key:
+    description: 'Test CA private key (PEM)'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate Mailpit TLS certificate
+      shell: bash
+      env:
+        CA_CERT: ${{ inputs.ca_cert }}
+        CA_KEY: ${{ inputs.ca_key }}
+      run: |
+        set -euo pipefail
+        TLS_DIR="${RUNNER_TEMP}/mailpit-tls"
+        mkdir -p "$TLS_DIR"
+        printf '%s\n' "$CA_CERT" > "$TLS_DIR/ca.crt"
+        printf '%s\n' "$CA_KEY" > "$TLS_DIR/ca.key"
+        openssl genrsa -out "$TLS_DIR/key.pem" 2048
+        openssl req -new -key "$TLS_DIR/key.pem" -out "$TLS_DIR/mailpit.csr" -subj "/CN=localhost"
+        openssl x509 -req -in "$TLS_DIR/mailpit.csr" -CA "$TLS_DIR/ca.crt" -CAkey "$TLS_DIR/ca.key" \
+          -CAcreateserial -out "$TLS_DIR/cert.pem" -days 1 -sha256 \
+          -extfile <(echo "subjectAltName=DNS:localhost")
+        rm -f "$TLS_DIR/ca.key" "$TLS_DIR/mailpit.csr"
+        # The Mailpit container runs as a different user and must read the key.
+        chmod 755 "$TLS_DIR"
+        chmod 644 "$TLS_DIR/cert.pem" "$TLS_DIR/key.pem"
+
+    # Requires COMPOSE_FILE to point to the Trento web docker-compose.yaml in
+    # the calling job. Mailpit credentials are fixed by that compose file.
+    - name: Start Mailpit
+      shell: bash
+      env:
+        TRENTO_SMTP_AUTHENTICATED: "true"
+        TRENTO_SMTP_TLS_DIR: ${{ runner.temp }}/mailpit-tls
+        TRENTO_SMTP_REQUIRE_STARTTLS: "true"
+      run: docker compose up -d mailpit
+
+    - name: Expose Mailpit SMTP port to the Trento host
+      shell: bash
+      env:
+        SSH_PRIVATE_KEY: ${{ inputs.ssh_private_key }}
+        SSH_USERNAME: ${{ inputs.ssh_username }}
+        HOST: ${{ inputs.host }}
+        SMTP_PORT: ${{ inputs.smtp_port }}
+      run: |
+        set -euo pipefail
+        mkdir -p ~/.ssh
+        printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        SSH_OPTS="-i $HOME/.ssh/id_rsa -o StrictHostKeyChecking=no"
+        ssh $SSH_OPTS -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
+          -E tunnel.log -N -R "${SMTP_PORT}:localhost:1025" \
+          "${SSH_USERNAME}@${HOST}" &
+        echo "$!" > tunnel.pid
+        for _ in $(seq 1 30); do
+          if ssh $SSH_OPTS "${SSH_USERNAME}@${HOST}" \
+            "ss -ltn | grep -q ':${SMTP_PORT} '"; then
+            exit 0
+          fi
+          sleep 1
+        done
+        cat tunnel.log >&2
+        exit 1

@@ -1,0 +1,23 @@
+name: 'Trust test CA on runner'
+description: 'Install the test certificate authority in the runner trust store so HTTPS calls to Trento hosts are verified'
+
+inputs:
+  ca_cert:
+    description: 'Certificate for the test certificate authority'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Trust test CA certificate
+      shell: bash
+      run: |
+        set -euo pipefail
+        CA_CERT_FILE="/usr/local/share/ca-certificates/trento-ca.crt"
+        sudo mkdir -p /usr/local/share/ca-certificates/
+        sudo tee "$CA_CERT_FILE" > /dev/null <<'EOF_CA_CRT'
+        ${{ inputs.ca_cert }}
+        EOF_CA_CRT
+        openssl x509 -in "$CA_CERT_FILE" -noout > /dev/null
+        sudo update-ca-certificates
+        echo "NODE_EXTRA_CA_CERTS=$CA_CERT_FILE" >> "$GITHUB_ENV"
