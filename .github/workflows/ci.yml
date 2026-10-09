@@ -31,6 +31,7 @@ jobs:
       sles_15_sp7: true
       sles_16_0: *not_dependabot
       package_source: 'rolling'
+      skip_alerting_tests: true
       cypress_spec: '**/about.cy.js'
       destroy_after: true
     secrets: inherit

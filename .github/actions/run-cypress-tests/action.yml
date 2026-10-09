@@ -1,0 +1,42 @@
+name: 'Run Cypress tests'
+description: 'Execute Cypress tests against a Trento host and upload failure screenshots'
+
+inputs:
+  host:
+    description: 'Trento host FQDN used as Cypress baseUrl'
+    required: true
+  photofinish_path:
+    description: 'Path to the installed photofinish binary'
+    required: true
+  expose:
+    description: 'Cypress expose parameter, without photofinish_binary'
+    required: true
+  spec:
+    description: 'Cypress spec pattern to run'
+    required: false
+    default: ''
+  screenshots_artifact_name:
+    description: 'Name of the uploaded screenshots artifact'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cypress run
+      uses: cypress-io/github-action@01e3b659a495b41649cdd0aa82e1d1624e26520b # v7.4.4
+      env:
+        cypress_video: false
+      with:
+        working-directory: trento-web/test/e2e
+        wait-on-timeout: 30
+        config: baseUrl=https://${{ inputs.host }},retries=2
+        expose: photofinish_binary=${{ inputs.photofinish_path }},${{ inputs.expose }}
+        spec: ${{ inputs.spec }}
+
+    - name: Upload cypress test screenshots
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      if: failure()
+      with:
+        name: ${{ inputs.screenshots_artifact_name }}
+        path: trento-web/test/e2e/cypress/screenshots/
+        retention-days: 1
