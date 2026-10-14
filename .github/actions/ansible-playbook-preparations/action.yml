@@ -91,7 +91,7 @@ runs:
           # Pin rabbitmq-server version for SLES16.0
           RABBITMQ_VERSION_LINE=""
           if [[ "$CURRENT_HOSTNAME" == *16sp0* ]]; then
-            RABBITMQ_VERSION_LINE='rabbitmq_version: "4.1.5-160000.1.1"'
+            RABBITMQ_VERSION_LINE='rabbitmq_version: "4.1.5-160000.2.1"'
           fi
 
           # Generate the inventory file
