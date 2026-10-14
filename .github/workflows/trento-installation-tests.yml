@@ -34,7 +34,11 @@ on:
           - 'blob_storage'
           - 'rolling'
       skip_cypress:
-        description: 'Skip the Cypress end-to-end tests'
+        description: 'Skip the main Cypress full test suite'
+        type: boolean
+        default: false
+      skip_alerting_tests:
+        description: 'Skip the alerting Cypress jobs (cypress-alerting-from-env and cypress-alerting-from-ui)'
         type: boolean
         default: false
       cypress_spec:
@@ -58,6 +62,7 @@ jobs:
       sles_16_0: ${{ inputs.sles_16_0 }}
       package_source: ${{ inputs.package_source }}
       skip_cypress: ${{ inputs.skip_cypress }}
+      skip_alerting_tests: ${{ inputs.skip_alerting_tests }}
       cypress_spec: ${{ inputs.cypress_spec }}
       web_ref: ${{ inputs.web_ref }}
     secrets: inherit

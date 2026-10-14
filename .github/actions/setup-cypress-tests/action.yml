@@ -1,0 +1,55 @@
+name: 'Setup Cypress tests'
+description: 'Prepare the runner to execute Cypress tests against Trento'
+
+inputs:
+  ca_cert:
+    description: 'Certificate for the test certificate authority'
+    required: true
+  github_token:
+    description: 'GitHub token used to install photofinish'
+    required: true
+  photofinish_version:
+    description: 'Photofinish release version'
+    required: true
+
+outputs:
+  photofinish_path:
+    description: 'Path to the installed photofinish binary'
+    value: ${{ steps.photofinish-path.outputs.path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Trust test CA certificate
+      uses: ./.github/actions/trust-runner-ca
+      with:
+        ca_cert: ${{ inputs.ca_cert }}
+
+    - name: Install photofinish
+      uses: jaxxstorm/action-install-gh-release@25e24d2d23ae098373794ef1d6faecb48ee52da8 # v3.0.0
+      with:
+        repo: trento-project/photofinish
+        tag: ${{ inputs.photofinish_version }}
+        cache: enable
+        chmod: 0755
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+
+    - name: Get photofinish path
+      id: photofinish-path
+      shell: bash
+      run: |
+        set -euo pipefail
+        photofinish_path="$(command -v photofinish)"
+        echo "path=$photofinish_path" >> "$GITHUB_OUTPUT"
+
+    - name: Setup Node.js
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: trento-web/.tool-versions
+        cache: npm
+        cache-dependency-path: trento-web/assets/package-lock.json
+
+    - name: Install web assets dependencies
+      shell: bash
+      run: cd trento-web/assets && npm ci
