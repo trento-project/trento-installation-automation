@@ -71,6 +71,7 @@ env:
   # Must match the credentials hardcoded in the Trento web docker-compose.yaml.
   MAILPIT_SMTP_USER: trentouser
   MAILPIT_SMTP_PASSWORD: pass
+  EXPECTED_RABBITMQ_VERSION: 4.1.7-160150.1.1
 
 jobs:
   provision-and-deploy:
@@ -116,6 +117,15 @@ jobs:
             printf '%s\n' "${selected_versions[@]}"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Validate hardcoded RabbitMQ version
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$EXPECTED_RABBITMQ_VERSION" =~ ^[0-9][A-Za-z0-9.+_~-]*-[A-Za-z0-9.+_~-]+$ ]]; then
+            echo "EXPECTED_RABBITMQ_VERSION must be a RPM version-release, for example 4.1.7-160150.1.1." >&2
+            exit 1
+          fi
 
       - name: Generate machines config CSV
         uses: ./.github/actions/generate-machines-config
@@ -239,6 +249,78 @@ jobs:
           azure_blob_storage_sas_token: ${{ secrets.AZURE_BLOB_STORAGE_SAS_TOKEN }}
           package_source: ${{ inputs.package_source }}
 
+      - name: Install RabbitMQ RPM from blob storage
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        env:
+          AZURE_BLOB_STORAGE: ${{ env.AZURE_BLOB_STORAGE }}
+          AZURE_BLOB_STORAGE_CONTAINER: ${{ env.AZURE_BLOB_STORAGE_CONTAINER }}
+          AZURE_BLOB_STORAGE_SAS_TOKEN: ${{ secrets.AZURE_BLOB_STORAGE_SAS_TOKEN }}
+        with:
+          host: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
+          username: ${{ env.SSH_USERNAME }}
+          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          command_timeout: 5m
+          envs: EXPECTED_RABBITMQ_VERSION,AZURE_BLOB_STORAGE,AZURE_BLOB_STORAGE_CONTAINER,AZURE_BLOB_STORAGE_SAS_TOKEN
+          script: |
+            set -e
+
+            source /etc/os-release
+            SLES_MAJOR_VERSION="${VERSION_ID%%.*}"
+            SP_VERSION="${VERSION_ID##*.}"
+
+            RPM_DIR=/var/cache/zypper/custom_repo
+
+            if [ ! -d "$RPM_DIR" ]; then
+              URL_BASE="https://$AZURE_BLOB_STORAGE.blob.core.windows.net/$AZURE_BLOB_STORAGE_CONTAINER"
+              URL_ORIGIN="$URL_BASE/$SLES_MAJOR_VERSION/$SP_VERSION/?$AZURE_BLOB_STORAGE_SAS_TOKEN"
+
+              sudo zypper --non-interactive --gpg-auto-import-keys addrepo https://packages.microsoft.com/sles/15/prod/ microsoft-prod 2>/dev/null || true
+              sudo zypper --non-interactive --gpg-auto-import-keys refresh
+              sudo zypper --non-interactive --gpg-auto-import-keys install -y azcopy
+
+              BLOB_LIST=$(azcopy list "$URL_ORIGIN" 2>/dev/null || true)
+              BLOB_RPM_COUNT=$(echo "$BLOB_LIST" | grep -c "\.rpm" || echo 0)
+              if [ "$BLOB_RPM_COUNT" -eq 0 ]; then
+                echo "No RPMs found in blob storage path $SLES_MAJOR_VERSION/$SP_VERSION/." >&2
+                exit 1
+              fi
+
+              sudo mkdir -p "$RPM_DIR"
+              sudo azcopy cp "$URL_BASE/$SLES_MAJOR_VERSION/$SP_VERSION/*?$AZURE_BLOB_STORAGE_SAS_TOKEN" "$RPM_DIR" --recursive=true
+
+              sudo zypper --non-interactive --gpg-auto-import-keys install --auto-agree-with-licenses createrepo_c
+              sudo createrepo_c "$RPM_DIR"
+              echo -e '[custom_rpms]\nname=Local Custom RPMs\nbaseurl=file:///var/cache/zypper/custom_repo/\nenabled=1\ngpgcheck=0\npriority=1' | sudo tee /etc/zypp/repos.d/custom_rpms.repo > /dev/null
+              sudo zypper clean --all
+              sudo zypper --non-interactive --gpg-auto-import-keys refresh
+            fi
+
+            if [ ! -d "$RPM_DIR" ]; then
+              echo "Custom RPM repository was not created. Upload rabbitmq-server-$EXPECTED_RABBITMQ_VERSION.*.rpm to the selected blob storage version directories." >&2
+              exit 1
+            fi
+
+            RABBITMQ_RPM=$(find "$RPM_DIR" -maxdepth 1 -type f -name 'rabbitmq-server-*.rpm' | head -n1)
+            if [ -z "$RABBITMQ_RPM" ]; then
+              echo "rabbitmq-server RPM not found in $RPM_DIR. Upload rabbitmq-server-$EXPECTED_RABBITMQ_VERSION.*.rpm to the selected blob storage version directories." >&2
+              exit 1
+            fi
+
+            RABBITMQ_RPM_VERSION=$(rpm -qp --qf '%{VERSION}-%{RELEASE}' "$RABBITMQ_RPM")
+            if [ "$RABBITMQ_RPM_VERSION" != "$EXPECTED_RABBITMQ_VERSION" ]; then
+              echo "Unexpected rabbitmq-server RPM version in blob repository: $RABBITMQ_RPM_VERSION, expected $EXPECTED_RABBITMQ_VERSION." >&2
+              exit 1
+            fi
+
+            sudo zypper --non-interactive --no-refresh search -s -x rabbitmq-server
+            sudo zypper --non-interactive --gpg-auto-import-keys install --auto-agree-with-licenses --oldpackage --from custom_rpms "rabbitmq-server=$EXPECTED_RABBITMQ_VERSION"
+
+            INSTALLED_RABBITMQ_VERSION=$(rpm -q --qf '%{VERSION}-%{RELEASE}' rabbitmq-server)
+            if [ "$INSTALLED_RABBITMQ_VERSION" != "$EXPECTED_RABBITMQ_VERSION" ]; then
+              echo "Unexpected installed rabbitmq-server version: $INSTALLED_RABBITMQ_VERSION, expected $EXPECTED_RABBITMQ_VERSION." >&2
+              exit 1
+            fi
+
       - name: Setup test CA
         id: setup-test-ca
         uses: ./.github/actions/setup-test-ca
@@ -271,6 +353,24 @@ jobs:
           hosts_fqdn_csv: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
           ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+
+      - name: Verify deployed RabbitMQ version
+        if: ${{ !inputs.provision_only }}
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        with:
+          host: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
+          username: ${{ env.SSH_USERNAME }}
+          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          command_timeout: 5m
+          envs: EXPECTED_RABBITMQ_VERSION
+          script: |
+            set -e
+
+            INSTALLED_RABBITMQ_VERSION=$(rpm -q --qf '%{VERSION}-%{RELEASE}' rabbitmq-server)
+            if [ "$INSTALLED_RABBITMQ_VERSION" != "$EXPECTED_RABBITMQ_VERSION" ]; then
+              echo "Unexpected installed rabbitmq-server version: $INSTALLED_RABBITMQ_VERSION, expected $EXPECTED_RABBITMQ_VERSION." >&2
+              exit 1
+            fi
 
       - name: Verify Trento instances healthcheck endpoints
         if: ${{ !inputs.provision_only }}
