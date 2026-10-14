@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: SUSE LLC
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 resource "azurerm_virtual_network" "vnet" {
   name                = "trento-testing-vnet${var.environment_suffix}"
