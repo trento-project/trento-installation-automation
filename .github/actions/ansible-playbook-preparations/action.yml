@@ -121,7 +121,7 @@ runs:
                   wanda_postgres_password: "postgres"
                   rabbitmq_password: "admin"
                   web_admin_password: "$WEB_ADMIN_PASSWORD"
-                  web_enable_alerting: true
+                  web_enable_alerting: false
                   web_smtp_server: "$SMTP_SERVER"
                   web_smtp_port: $SMTP_PORT
                   web_smtp_user: "$SMTP_USER"
