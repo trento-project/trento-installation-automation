@@ -64,6 +64,7 @@ env:
   AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
   SSH_USERNAME: cloudadmin
   PHOTOFINISH_VERSION: v1.4.2
+  CHROME_VERSION: 156.0.8078.47 # https://googlechromelabs.github.io/chrome-for-testing
   # The Trento web instances are enforced to send alerting emails to
   # localhost:1025, a reverse SSH tunnel to the Mailpit on the email tests runner.
   MAILPIT_SMTP_HOST: localhost
@@ -369,12 +370,14 @@ jobs:
           ca_cert: ${{ vars.TRENTO_TEST_CA_CRT }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           photofinish_version: ${{ env.PHOTOFINISH_VERSION }}
+          chrome_version: ${{ env.CHROME_VERSION }}
 
       - name: Run Cypress tests
         uses: ./.github/actions/run-cypress-tests
         with:
           host: ${{ matrix.host }}
           photofinish_path: ${{ steps.setup-cypress-tests.outputs.photofinish_path }}
+          browser: ${{ steps.setup-cypress-tests.outputs.chrome_path }}
           expose: wanda_mode=prod,web_mode=prod
           spec: ${{ inputs.cypress_spec }}
           screenshots_artifact_name: e2e-screenshots-${{ matrix.host }}
@@ -430,12 +433,14 @@ jobs:
           ca_cert: ${{ vars.TRENTO_TEST_CA_CRT }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           photofinish_version: ${{ env.PHOTOFINISH_VERSION }}
+          chrome_version: ${{ env.CHROME_VERSION }}
 
       - name: Run Cypress tests
         uses: ./.github/actions/run-cypress-tests
         with:
           host: ${{ matrix.host }}
           photofinish_path: ${{ steps.setup-cypress-tests.outputs.photofinish_path }}
+          browser: ${{ steps.setup-cypress-tests.outputs.chrome_path }}
           expose: wanda_mode=prod,web_mode=prod,ALERTING_TESTS=true
           spec: cypress/e2e/alerting.cy.js
           screenshots_artifact_name: e2e-alerting-env-screenshots-${{ matrix.host }}
@@ -520,12 +525,14 @@ jobs:
           ca_cert: ${{ vars.TRENTO_TEST_CA_CRT }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           photofinish_version: ${{ env.PHOTOFINISH_VERSION }}
+          chrome_version: ${{ env.CHROME_VERSION }}
 
       - name: Run Cypress tests
         uses: ./.github/actions/run-cypress-tests
         with:
           host: ${{ matrix.host }}
           photofinish_path: ${{ steps.setup-cypress-tests.outputs.photofinish_path }}
+          browser: ${{ steps.setup-cypress-tests.outputs.chrome_path }}
           expose: wanda_mode=prod,web_mode=prod,ALERTING_DB_TESTS=true,ALERTING_TESTS=true
           spec: cypress/e2e/alerting.cy.js
           screenshots_artifact_name: e2e-alerting-ui-screenshots-${{ matrix.host }}

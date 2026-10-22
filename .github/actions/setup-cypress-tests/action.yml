@@ -11,11 +11,17 @@ inputs:
   photofinish_version:
     description: 'Photofinish release version'
     required: true
+  chrome_version:
+    description: 'Chrome for Testing version to install'
+    required: true
 
 outputs:
   photofinish_path:
     description: 'Path to the installed photofinish binary'
     value: ${{ steps.photofinish-path.outputs.path }}
+  chrome_path:
+    description: 'Path to the installed Chrome binary'
+    value: ${{ steps.setup-chrome.outputs.chrome-path }}
 
 runs:
   using: 'composite'
@@ -53,3 +59,9 @@ runs:
     - name: Install web assets dependencies
       shell: bash
       run: cd trento-web/assets && npm ci
+
+    - name: Setup Chrome
+      id: setup-chrome
+      uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2.2.0
+      with:
+        chrome-version: ${{ inputs.chrome_version }}
