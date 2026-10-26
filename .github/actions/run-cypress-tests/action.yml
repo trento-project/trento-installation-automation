@@ -11,6 +11,9 @@ inputs:
   expose:
     description: 'Cypress expose parameter, without photofinish_binary'
     required: true
+  browser:
+    description: 'Path to the browser binary used to run Cypress'
+    required: true
   spec:
     description: 'Cypress spec pattern to run'
     required: false
@@ -28,6 +31,7 @@ runs:
         cypress_video: false
       with:
         working-directory: trento-web/test/e2e
+        browser: ${{ inputs.browser }}
         wait-on-timeout: 30
         config: baseUrl=https://${{ inputs.host }},retries=2
         expose: photofinish_binary=${{ inputs.photofinish_path }},${{ inputs.expose }}
