@@ -11,9 +11,6 @@ inputs:
   photofinish_version:
     description: 'Photofinish release version'
     required: true
-  chrome_version:
-    description: 'Chrome for Testing version to install'
-    required: true
 
 outputs:
   photofinish_path:
@@ -60,8 +57,20 @@ runs:
       shell: bash
       run: cd trento-web/assets && npm ci
 
+    - name: Read pinned Chrome version
+      id: chrome-version
+      shell: bash
+      run: |
+        set -euo pipefail
+        version="$(tr -d '[:space:]' < trento-web/test/e2e/.chrome-version)"
+        if [[ -z "$version" ]]; then
+          echo "::error::Chrome version in trento-web/test/e2e/.chrome-version is empty"
+          exit 1
+        fi
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
     - name: Setup Chrome
       id: setup-chrome
       uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2.2.0
       with:
-        chrome-version: ${{ inputs.chrome_version }}
+        chrome-version: ${{ steps.chrome-version.outputs.version }}
