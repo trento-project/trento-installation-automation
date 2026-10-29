@@ -42,12 +42,14 @@ resource "azurerm_network_interface_security_group_association" "nic_nsg_assoc" 
   network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
+# Sized to the Trento Server minimum hardware requirements: 2 CPU cores, 4 GB RAM, 64 GB storage
+# https://www.trento-project.io/docs/user-guide/trento-requirements.html
 resource "azurerm_linux_virtual_machine" "vm" {
   for_each              = local.virtual_machines
   name                  = each.value.name
   resource_group_name   = data.azurerm_resource_group.rg.name
   location              = data.azurerm_resource_group.rg.location
-  size                  = "Standard_DS1_v2"
+  size                  = "Standard_F2s_v2"
   admin_username        = var.ssh_user
   network_interface_ids = [azurerm_network_interface.nic[each.key].id]
   tags                  = local.common_tags
@@ -70,6 +72,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "Premium_LRS"
+    disk_size_gb         = 64
   }
 
   source_image_reference {
