@@ -302,10 +302,11 @@ jobs:
               exit 1
             fi
 
-  # The installation phase deploys a real agent; clean it up before any Cypress
-  # job generates photofinish data to avoid conflicts during tests execution.
-  cleanup-agent:
-    name: Clean up Trento agent (${{ matrix.host }})
+  # Prepare the hosts for the e2e tests: clean up the agent deployed by the
+  # installation phase (to avoid photofinish data conflicts) and raise the
+  # PostgreSQL max_connections, restarting the services once at the end.
+  prepare-e2e:
+    name: Prepare e2e environment (${{ matrix.host }})
     needs: provision-and-deploy
     if: ${{ needs.provision-and-deploy.result == 'success' && !inputs.provision_only && (!inputs.skip_cypress || !inputs.skip_alerting_tests) }}
     runs-on: ubuntu-24.04
@@ -331,11 +332,24 @@ jobs:
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
           web_admin_password: ${{ secrets.WEB_ADMIN_PASSWORD }}
 
+      - name: Set PostgreSQL max_connections to 200
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        with:
+          host: ${{ matrix.host }}
+          username: ${{ env.SSH_USERNAME }}
+          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          script: |
+            set -euo pipefail
+
+            sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET max_connections = 200"
+            sudo systemctl restart postgresql
+            sudo systemctl restart trento-web trento-wanda
+
   cypress-full-suite:
     name: Cypress Full Suite (${{ matrix.host }})
     needs:
       - provision-and-deploy
-      - cleanup-agent
+      - prepare-e2e
     if: ${{ needs.provision-and-deploy.result == 'success' && !inputs.provision_only && !inputs.skip_cypress }}
     runs-on: ubuntu-24.04
     strategy:
@@ -384,9 +398,9 @@ jobs:
     name: Cypress Alerting from Env (${{ matrix.host }})
     needs:
       - provision-and-deploy
-      - cleanup-agent
+      - prepare-e2e
       - cypress-full-suite
-    if: ${{ !cancelled() && needs.provision-and-deploy.result == 'success' && needs.cleanup-agent.result == 'success' && !inputs.provision_only && !inputs.skip_alerting_tests }}
+    if: ${{ !cancelled() && needs.provision-and-deploy.result == 'success' && needs.prepare-e2e.result == 'success' && !inputs.provision_only && !inputs.skip_alerting_tests }}
     runs-on: ubuntu-24.04
     env:
       COMPOSE_FILE: trento-web/docker-compose.yaml
@@ -452,10 +466,10 @@ jobs:
     name: Cypress Alerting from UI (${{ matrix.host }})
     needs:
       - provision-and-deploy
-      - cleanup-agent
+      - prepare-e2e
       - cypress-full-suite
       - cypress-alerting-from-env
-    if: ${{ !cancelled() && needs.provision-and-deploy.result == 'success' && needs.cleanup-agent.result == 'success' && !inputs.provision_only && !inputs.skip_alerting_tests }}
+    if: ${{ !cancelled() && needs.provision-and-deploy.result == 'success' && needs.prepare-e2e.result == 'success' && !inputs.provision_only && !inputs.skip_alerting_tests }}
     runs-on: ubuntu-24.04
     env:
       COMPOSE_FILE: trento-web/docker-compose.yaml
