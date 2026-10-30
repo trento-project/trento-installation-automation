@@ -33,7 +33,7 @@ runs:
         working-directory: trento-web/test/e2e
         browser: ${{ inputs.browser }}
         wait-on-timeout: 30
-        config: baseUrl=https://${{ inputs.host }},retries=2
+        config: baseUrl=https://${{ inputs.host }},retries=1
         expose: photofinish_binary=${{ inputs.photofinish_path }},${{ inputs.expose }}
         spec: ${{ inputs.spec }}
 
