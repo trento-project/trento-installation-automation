@@ -272,6 +272,28 @@ jobs:
           ssh_username: ${{ env.SSH_USERNAME }}
           ssh_private_key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
 
+      # Match the max_connections=200 used by trento-project/web docker-compose.yaml
+      # (local development and CI), so the e2e tests run with the same limit.
+      - name: Set PostgreSQL max_connections to 200
+        if: ${{ !inputs.provision_only }}
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        with:
+          host: ${{ steps.get-hosts.outputs.hosts_fqdn_csv }}
+          username: ${{ env.SSH_USERNAME }}
+          key: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
+          script: |
+            set -euo pipefail
+
+            sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET max_connections = 200"
+            sudo systemctl restart postgresql
+            sudo systemctl restart trento-web trento-wanda
+
+            MAX_CONNECTIONS="$(sudo -u postgres psql -tAc 'SHOW max_connections')"
+            if [ "$MAX_CONNECTIONS" != "200" ]; then
+              echo "ERROR: max_connections is ${MAX_CONNECTIONS} on $(hostname -s), expected 200" >&2
+              exit 1
+            fi
+
       - name: Verify Trento instances healthcheck endpoints
         if: ${{ !inputs.provision_only }}
         uses: ./.github/actions/verify-trento-health
