@@ -49,7 +49,8 @@ runs:
           if [ "$VERSION_ID" = "15.4" ]; then
             install_ansible_package() {
               sudo zypper --non-interactive --gpg-auto-import-keys download ansible-trento
-              sudo sh -c 'rpm -Uvh --nodeps /var/cache/zypp/packages/*/*/ansible-trento-*.rpm'
+              sudo find /var/cache/zypp/packages -name 'ansible-trento-*.rpm' -exec rpm -Uvh --nodeps {} +
+              rpm -q ansible-trento
             }
           else
             install_ansible_package() {
