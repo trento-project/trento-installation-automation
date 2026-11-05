@@ -170,11 +170,13 @@ jobs:
       - name: Terraform Init
         id: init
         working-directory: ./terraform
+        env:
+          STATE_KEY: ${{ inputs.state_key }}
         run: |
           terraform init \
             -backend-config="storage_account_name=${{ env.AZURE_BLOB_STORAGE }}" \
             -backend-config="container_name=${{ env.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}" \
-            -backend-config="key=${{ inputs.state_key }}" \
+            -backend-config="key=$STATE_KEY" \
             -backend-config="resource_group_name=${{ vars.AZURE_RESOURCE_GROUP }}" \
             -backend-config="client_id=${{ steps.azure-creds.outputs.client_id }}" \
             -backend-config="client_secret=${{ steps.azure-creds.outputs.client_secret }}" \

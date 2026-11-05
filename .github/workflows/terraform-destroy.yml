@@ -64,7 +64,7 @@ jobs:
           azure_resource_group: ${{ inputs.azure_resource_group || vars.AZURE_RESOURCE_GROUP }}
           backend_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
           environment_suffix: ${{ inputs.environment_suffix }}
-          state_key: ${{ inputs.state_key }}
+          state_key: ${{ inputs.state_key || 'terraform.tfstate' }}
           azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
           ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
           client_id: ${{ steps.azure-creds.outputs.client_id }}
