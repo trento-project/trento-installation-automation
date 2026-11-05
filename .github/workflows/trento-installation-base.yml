@@ -97,6 +97,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Validate state key
+        env:
+          STATE_KEY: ${{ inputs.state_key }}
+        run: |
+          if [ -z "$STATE_KEY" ]; then
+            echo "Error: state_key must not be empty." >&2
+            exit 1
+          fi
+
       - name: Select OS versions
         id: select-os-versions
         run: |
