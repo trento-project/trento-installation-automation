@@ -7,6 +7,19 @@ name: Azure Cleanup
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      azure_resource_group:
+        description: 'Azure resource group the environment was deployed into. Leave empty to use vars.AZURE_RESOURCE_GROUP.'
+        type: string
+        default: ''
+      environment_suffix:
+        description: 'Suffix appended to VM and network resource names'
+        type: string
+        default: ''
+      state_key:
+        description: 'Terraform state blob name'
+        type: string
+        default: 'terraform.tfstate'
 
 env:
   AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
@@ -48,7 +61,10 @@ jobs:
       - name: Run Terraform Destroy
         uses: ./.github/actions/terraform-destroy
         with:
-          azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          azure_resource_group: ${{ inputs.azure_resource_group || vars.AZURE_RESOURCE_GROUP }}
+          backend_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          environment_suffix: ${{ inputs.environment_suffix }}
+          state_key: ${{ inputs.state_key }}
           azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
           ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
           client_id: ${{ steps.azure-creds.outputs.client_id }}
