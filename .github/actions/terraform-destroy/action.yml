@@ -20,6 +20,10 @@ inputs:
     description: 'Terraform state blob name'
     required: false
     default: 'terraform.tfstate'
+  environment_suffix:
+    description: 'Suffix appended to VM and network resource names, matching the Terraform environment_suffix variable'
+    required: false
+    default: ''
   azure_owner_tag:
     description: 'Azure owner tag'
     required: true
@@ -85,6 +89,7 @@ runs:
       working-directory: ${{ inputs.working_directory }}
       env:
         TF_VAR_azure_resource_group: ${{ inputs.azure_resource_group }}
+        TF_VAR_environment_suffix: ${{ inputs.environment_suffix }}
         TF_VAR_azure_owner_tag: ${{ inputs.azure_owner_tag }}
         TF_VAR_ssh_public_key_content: ${{ inputs.ssh_public_key_content }}
         TF_VAR_ssh_private_key_content: ""

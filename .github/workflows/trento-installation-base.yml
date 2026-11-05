@@ -54,8 +54,20 @@ on:
         description: 'Destroy Terraform-managed infrastructure after the workflow finishes'
         type: boolean
         default: false
+      azure_resource_group:
+        description: 'Azure resource group to deploy into. Leave empty to use vars.AZURE_RESOURCE_GROUP. The Terraform state backend always lives in vars.AZURE_RESOURCE_GROUP.'
+        type: string
+        default: ''
+      environment_suffix:
+        description: 'Suffix appended to VM and network resource names to keep environments apart'
+        type: string
+        default: ''
+      state_key:
+        description: 'Terraform state blob name'
+        type: string
+        default: 'terraform.tfstate'
 concurrency:
-  group: trento-installation-tests
+  group: ${{ inputs.state_key == 'terraform.tfstate' && 'trento-installation-tests' || format('trento-installation-tests-{0}', inputs.state_key) }}
   cancel-in-progress: false
 
 env:
@@ -84,6 +96,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate state key
+        env:
+          STATE_KEY: ${{ inputs.state_key }}
+        run: |
+          if [ -z "$STATE_KEY" ]; then
+            echo "Error: state_key must not be empty." >&2
+            exit 1
+          fi
 
       - name: Select OS versions
         id: select-os-versions
@@ -158,11 +179,13 @@ jobs:
       - name: Terraform Init
         id: init
         working-directory: ./terraform
+        env:
+          STATE_KEY: ${{ inputs.state_key }}
         run: |
           terraform init \
             -backend-config="storage_account_name=${{ env.AZURE_BLOB_STORAGE }}" \
             -backend-config="container_name=${{ env.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}" \
-            -backend-config="key=terraform.tfstate" \
+            -backend-config="key=$STATE_KEY" \
             -backend-config="resource_group_name=${{ vars.AZURE_RESOURCE_GROUP }}" \
             -backend-config="client_id=${{ steps.azure-creds.outputs.client_id }}" \
             -backend-config="client_secret=${{ steps.azure-creds.outputs.client_secret }}" \
@@ -189,7 +212,8 @@ jobs:
         working-directory: ./terraform
         run: terraform destroy -auto-approve -input=false
         env:
-          TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          TF_VAR_azure_resource_group: ${{ inputs.azure_resource_group || vars.AZURE_RESOURCE_GROUP }}
+          TF_VAR_environment_suffix: ${{ inputs.environment_suffix }}
           TF_VAR_azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
           TF_VAR_ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
           TF_VAR_ssh_private_key_content: ""
@@ -199,7 +223,8 @@ jobs:
         working-directory: ./terraform
         run: terraform plan -no-color -out=tfplan -input=false
         env:
-          TF_VAR_azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          TF_VAR_azure_resource_group: ${{ inputs.azure_resource_group || vars.AZURE_RESOURCE_GROUP }}
+          TF_VAR_environment_suffix: ${{ inputs.environment_suffix }}
           TF_VAR_azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
           TF_VAR_ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
           TF_VAR_ssh_private_key_content: ${{ secrets.PRIVATE_SSH_KEY_CONTENT }}
@@ -215,7 +240,8 @@ jobs:
         uses: ./.github/actions/get-machine-hosts
         with:
           csv_file: .machines.conf.csv
-          azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          azure_resource_group: ${{ inputs.azure_resource_group || vars.AZURE_RESOURCE_GROUP }}
+          environment_suffix: ${{ inputs.environment_suffix }}
 
       - name: Register SUSE machines & activate modules
         id: activate-modules
@@ -562,4 +588,8 @@ jobs:
       - cypress-alerting-from-ui
     if: ${{ always() && inputs.destroy_after }}
     uses: ./.github/workflows/terraform-destroy.yml
+    with:
+      azure_resource_group: ${{ inputs.azure_resource_group }}
+      environment_suffix: ${{ inputs.environment_suffix }}
+      state_key: ${{ inputs.state_key }}
     secrets: inherit
