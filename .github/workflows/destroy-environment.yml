@@ -1,0 +1,101 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Destroy Environment
+run-name: Destroy environment ${{ inputs.environment_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: 'Name of the environment to destroy. Targets resource group trento-env-<name>.'
+        type: string
+        required: true
+
+# Same group as the provisioning run of this environment, so it cannot be torn down mid-run.
+concurrency:
+  group: ${{ format('trento-installation-tests-{0}', inputs.environment_name) }}
+  cancel-in-progress: false
+
+env:
+  AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
+  AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
+  ENVIRONMENT_NAME: ${{ inputs.environment_name }}
+  RESOURCE_GROUP: ${{ format('trento-env-{0}', inputs.environment_name) }}
+  MANAGED_BY_TAG: trento-installation-automation
+
+jobs:
+  destroy:
+    name: Destroy environment
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The name becomes the environment_suffix, so it must also satisfy terraform/variables.tf.
+      - name: Validate environment name
+        run: |
+          if ! [[ "$ENVIRONMENT_NAME" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+            echo "Error: environment_name must be lowercase alphanumeric or hyphens, and must not start or end with a hyphen." >&2
+            exit 1
+          fi
+
+      - name: Azure Login
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Check resource group ownership
+        run: |
+          if ! MANAGED_BY=$(az group show --name "$RESOURCE_GROUP" --query 'tags.ManagedBy' -o tsv); then
+            echo "Error: resource group $RESOURCE_GROUP not found." >&2
+            exit 1
+          fi
+          if [[ "$MANAGED_BY" != "$MANAGED_BY_TAG" ]]; then
+            echo "Error: resource group $RESOURCE_GROUP is not tagged ManagedBy=$MANAGED_BY_TAG; refusing to destroy it." >&2
+            exit 1
+          fi
+
+      - name: Generate machines config CSV
+        uses: ./.github/actions/generate-machines-config
+        with:
+          os_versions: |
+            15.4
+            15.5
+            15.6
+            15.7
+            16.0
+
+      - name: Extract Azure Credentials
+        id: azure-creds
+        uses: ./.github/actions/extract-azure-credentials
+        with:
+          azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Fails outright if the resource group is already partially gone; the group deletion below sweeps up.
+      - name: Run Terraform Destroy
+        id: terraform-destroy
+        continue-on-error: true
+        uses: ./.github/actions/terraform-destroy
+        with:
+          azure_resource_group: ${{ env.RESOURCE_GROUP }}
+          backend_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          environment_suffix: ${{ format('-{0}', inputs.environment_name) }}
+          state_key: ${{ format('terraform-{0}.tfstate', inputs.environment_name) }}
+          azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
+          ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
+          client_id: ${{ steps.azure-creds.outputs.client_id }}
+          client_secret: ${{ steps.azure-creds.outputs.client_secret }}
+          tenant_id: ${{ steps.azure-creds.outputs.tenant_id }}
+          subscription_id: ${{ steps.azure-creds.outputs.subscription_id }}
+
+      - name: Delete resource group
+        run: az group delete --name "$RESOURCE_GROUP" --yes
+
+      - name: Report Terraform Destroy failure
+        if: steps.terraform-destroy.outcome == 'failure'
+        run: echo "::warning::terraform destroy failed; resources were removed by deleting $RESOURCE_GROUP, but the Terraform state may be stale."
