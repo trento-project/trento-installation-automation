@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: SUSE LLC
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-name: Azure Cleanup
+name: Destroy Infrastructure
 # Destroy Azure Resources
 
 on:
@@ -32,7 +32,7 @@ on:
 
 # Serialise with deployments of the same environment so a cleanup cannot tear it down mid-run.
 concurrency:
-  group: ${{ inputs.caller_holds_concurrency_group && format('azure-cleanup-{0}', github.run_id) || format('trento-installation-tests{0}', inputs.environment_suffix) }}
+  group: ${{ inputs.caller_holds_concurrency_group && format('destroy-infrastructure-{0}', github.run_id) || format('trento-installation-tests{0}', inputs.environment_suffix) }}
   cancel-in-progress: false
 
 env:
