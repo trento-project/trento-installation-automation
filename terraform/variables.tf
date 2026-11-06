@@ -33,6 +33,7 @@ variable "environment_suffix" {
   description = "Suffix appended to VM and network resource names to keep concurrent environments apart"
   default     = ""
 
+  # Also validated in trento-installation-base.yml and terraform-destroy.yml; keep them in sync.
   validation {
     condition     = can(regex("^[a-z0-9-]*$", var.environment_suffix)) && !endswith(var.environment_suffix, "-")
     error_message = "The environment_suffix must be lowercase alphanumeric or hyphens, and must not end with a hyphen."

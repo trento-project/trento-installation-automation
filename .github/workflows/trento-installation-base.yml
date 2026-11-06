@@ -94,8 +94,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Mirrors the environment_suffix validation in terraform/variables.tf, which
-      # runs too late: the suffix already names the state blob at init time.
+      # Intentionally duplicated in terraform-destroy.yml and terraform/variables.tf; keep them in sync.
+      # Terraform's validation runs too late: the suffix already names the state blob at init time.
       - name: Validate environment suffix
         env:
           ENVIRONMENT_SUFFIX: ${{ inputs.environment_suffix }}
