@@ -144,35 +144,25 @@ The manual workflows expose one boolean input per supported version so you can c
 
 == Usage
 
-=== Running Tests
+=== Running Tests and Provisioning Environments
 
-. Go to **Actions** > **Trento Installation Tests**
+Manual runs always target an isolated named environment, so they never interfere with the CI deployments:
+
+. Go to **Actions** > **Provision & Test Environment**
 . Click **Run workflow**
+. Set `environment_name`, which derives the resource group `trento-env-<name>`, the VM name suffix and the Terraform state
 . Select the SLES versions you want to deploy to
-. Select the `package_source` to configure on machines (`blob_storage` or `rolling`)
-. Optionally enable `skip_cypress` to stop after deployment and health verification
-. Optionally set `cypress_spec` to the Cypress spec pattern to run (leave empty for the full suite)
-. Optionally set `web_ref` to the branch, tag or commit of https://github.com/trento-project/web[trento-project/web] the Cypress tests are taken from
+. Enable `install_rolling` to install from the Trento rolling repository instead of the RPMs in Azure Blob Storage
+. Optionally enable `provision_only` to skip the Trento deployment
+. Optionally enable `skip_cypress` and `skip_alerting_tests` to skip the Cypress suites (they run by default), set `cypress_spec` to the spec pattern to run (leave empty for the full suite) and `web_ref` to the branch, tag or commit of https://github.com/trento-project/web[trento-project/web] the tests are taken from
 . Click **Run workflow**
 
-The workflow always recreates the Terraform-managed infrastructure before installing Trento. After installation, Cypress end-to-end tests run against each machine unless `skip_cypress` is enabled. If Cypress fails, screenshots are uploaded as workflow artifacts.
-
-=== Provisioning Infrastructure Only
-
-To provision and configure the virtual machines without deploying Trento (useful for testing playbook changes locally or inspecting the environment):
-
-. Go to **Actions** > **Provision Infrastructure**
-. Click **Run workflow**
-. Select the SLES versions you want to provision
-. Select the `package_source` to configure on machines (`blob_storage` or `rolling`)
-. Click **Run workflow**
-
-The workflow recreates the Terraform-managed infrastructure, registers SUSE machines and activates modules, configures the selected package repositories, generates test SSL certificates, and prepares the self-targeting Ansible inventory in `/etc/ansible/trento-inventory.yml`, leaving the machines ready for manual inspection or running Ansible playbooks.
+The workflow creates the resource group, or reuses it if it already exists and is tagged `ManagedBy=trento-installation-automation` (any other existing group makes it fail before touching anything). It then destroys and recreates the Terraform-managed infrastructure and installs Trento. The run summary lists the parameters used, and the run name identifies the environment.
 
 Two behaviors are worth knowing before launching a run:
 
-* Manually dispatched runs do **not** destroy the infrastructure when they finish, so the deployed environments stay available for manual inspection. Destroy them with the *Azure Cleanup* workflow once you are done.
-* All runs share the `trento-installation-tests` concurrency group and are never canceled, so a run started while another one is in progress waits in the queue instead of starting immediately.
+* The infrastructure is **not** destroyed when the run finishes, so the environment stays available for debugging, even if a step failed. Delete its resource group (`trento-env-<name>`) once you are done.
+* Runs of the same environment share a concurrency group. A run in progress is never canceled and a new one waits for it, but GitHub keeps only one pending run per group: if a third run is queued, it replaces the pending one, which is canceled.
 
 === Choosing which packages to test
 
@@ -211,7 +201,7 @@ To confirm afterwards which revision produced the results, check the log of the 
 
 === Accessing the deployed environments
 
-Because manually dispatched runs leave the infrastructure in place, each machine stays reachable for manual validation at `+https://trento<sles_version>sp<sp_version>.<azure_region>.cloudapp.azure.com/+`, where `<azure_region>` is the location of `AZURE_RESOURCE_GROUP`. For example, https://trento15sp7.westeurope.cloudapp.azure.com/ for SLES 15 SP7.
+Because manually dispatched runs leave the infrastructure in place, each machine stays reachable for manual validation at `+https://trento<sles_version>sp<sp_version>-<environment_name>.<azure_region>.cloudapp.azure.com/+`, where `<azure_region>` is the location of the environment resource group (`trento-env-<environment_name>`), which is the one shown in the run summary. For example, https://trento15sp7-foo.westeurope.cloudapp.azure.com/ for SLES 15 SP7 in the `foo` environment.
 
 You can access the deployments using the following methods:
 
@@ -226,12 +216,7 @@ The **Continuous Integration** workflow runs on pushes to `main`, pull request o
 
 === Cleanup
 
-To destroy all provisioned infrastructure:
-
-. Go to **Actions** > **Azure Cleanup**
-. Click **Run workflow**
-
-The cleanup workflow always generates the full machine configuration for every supported SLES version before running `terraform destroy`, so manual cleanup and CI cleanup both target all Terraform-managed infrastructure by default.
+The infrastructure of the **Continuous Integration** workflow is destroyed by the reusable `terraform-destroy.yml` workflow, which always generates the full machine configuration for every supported SLES version before running `terraform destroy`. It is not meant to be dispatched manually.
 
 == Supported SLES Versions
 
