@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: 'Select OS Versions'
+description: 'Build a newline-separated list of SLES versions from per-version boolean inputs, failing if none is selected'
+
+inputs:
+  sles_15_sp4:
+    description: 'Deploy to SLES 15 SP4'
+    required: true
+  sles_15_sp5:
+    description: 'Deploy to SLES 15 SP5'
+    required: true
+  sles_15_sp6:
+    description: 'Deploy to SLES 15 SP6'
+    required: true
+  sles_15_sp7:
+    description: 'Deploy to SLES 15 SP7'
+    required: true
+  sles_16_0:
+    description: 'Deploy to SLES 16.0'
+    required: true
+
+outputs:
+  os_versions:
+    description: 'Newline-separated list of selected SLES versions (e.g. "15.6\n16.0")'
+    value: ${{ steps.select.outputs.os_versions }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Select OS versions
+      id: select
+      shell: bash
+      env:
+        SLES_15_SP4: ${{ inputs.sles_15_sp4 }}
+        SLES_15_SP5: ${{ inputs.sles_15_sp5 }}
+        SLES_15_SP6: ${{ inputs.sles_15_sp6 }}
+        SLES_15_SP7: ${{ inputs.sles_15_sp7 }}
+        SLES_16_0: ${{ inputs.sles_16_0 }}
+      run: |
+        selected_versions=()
+
+        if [[ "$SLES_15_SP4" == 'true' ]]; then
+          selected_versions+=("15.4")
+        fi
+        if [[ "$SLES_15_SP5" == 'true' ]]; then
+          selected_versions+=("15.5")
+        fi
+        if [[ "$SLES_15_SP6" == 'true' ]]; then
+          selected_versions+=("15.6")
+        fi
+        if [[ "$SLES_15_SP7" == 'true' ]]; then
+          selected_versions+=("15.7")
+        fi
+        if [[ "$SLES_16_0" == 'true' ]]; then
+          selected_versions+=("16.0")
+        fi
+
+        if [ ${#selected_versions[@]} -eq 0 ]; then
+          echo "Error: Select at least one supported SLES version." >&2
+          exit 1
+        fi
+
+        {
+          echo "os_versions<<EOF"
+          printf '%s\n' "${selected_versions[@]}"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"

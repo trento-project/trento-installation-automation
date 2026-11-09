@@ -105,35 +105,13 @@ jobs:
 
       - name: Select OS versions
         id: select-os-versions
-        run: |
-          selected_versions=()
-
-          if [[ "${{ inputs.sles_15_sp4 }}" == 'true' ]]; then
-            selected_versions+=("15.4")
-          fi
-          if [[ "${{ inputs.sles_15_sp5 }}" == 'true' ]]; then
-            selected_versions+=("15.5")
-          fi
-          if [[ "${{ inputs.sles_15_sp6 }}" == 'true' ]]; then
-            selected_versions+=("15.6")
-          fi
-          if [[ "${{ inputs.sles_15_sp7 }}" == 'true' ]]; then
-            selected_versions+=("15.7")
-          fi
-          if [[ "${{ inputs.sles_16_0 }}" == 'true' ]]; then
-            selected_versions+=("16.0")
-          fi
-
-          if [ ${#selected_versions[@]} -eq 0 ]; then
-            echo "Error: Select at least one supported SLES version." >&2
-            exit 1
-          fi
-
-          {
-            echo "os_versions<<EOF"
-            printf '%s\n' "${selected_versions[@]}"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/select-os-versions
+        with:
+          sles_15_sp4: ${{ inputs.sles_15_sp4 }}
+          sles_15_sp5: ${{ inputs.sles_15_sp5 }}
+          sles_15_sp6: ${{ inputs.sles_15_sp6 }}
+          sles_15_sp7: ${{ inputs.sles_15_sp7 }}
+          sles_16_0: ${{ inputs.sles_16_0 }}
 
       - name: Generate machines config CSV
         uses: ./.github/actions/generate-machines-config
