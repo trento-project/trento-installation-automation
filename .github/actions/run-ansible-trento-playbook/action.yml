@@ -28,7 +28,7 @@ runs:
         script: |
           set -e
 
-          CURRENT_HOSTNAME=$(hostname -s)
+          source /etc/os-release
 
           INVENTORY_FILE="/etc/ansible/trento-inventory.yml"
 
@@ -38,7 +38,7 @@ runs:
           fi
 
           # Use venv with ansible 9 only on SP4/SP5
-          if [[ "$CURRENT_HOSTNAME" == *sp4* || "$CURRENT_HOSTNAME" == *sp5* ]]; then
+          if [[ "$VERSION_ID" == "15.4" || "$VERSION_ID" == "15.5" ]]; then
             rm -rf .venv-ansible
             /usr/bin/python3.11 -m venv .venv-ansible
             source .venv-ansible/bin/activate
@@ -48,7 +48,7 @@ runs:
           fi
 
           # SP4 has no ansible-linux-system-roles, but the playbooks still need the role to exist
-          if [[ "$CURRENT_HOSTNAME" == *sp4* ]]; then
+          if [[ "$VERSION_ID" == "15.4" ]]; then
             sudo zypper --non-interactive install -y git-core
             rm -rf .ansible-roles
             git clone --quiet --depth 1 --branch 1.0.2-suse https://github.com/SUSE/ansible-suseconnect.git .ansible-roles/suseconnect

@@ -58,6 +58,8 @@ runs:
           # Get current hostname (short name, e.g., trento15sp6)
           CURRENT_HOSTNAME=$(hostname -s)
 
+          source /etc/os-release
+
           # Construct Azure public FQDN from short hostname
           CURRENT_FQDN="${CURRENT_HOSTNAME}.${AZURE_REGION}.cloudapp.azure.com"
 
@@ -100,7 +102,7 @@ runs:
 
           # Set python interpreter line only for SP4/SP5
           PYTHON_INTERPRETER_LINE=""
-          if [[ "$CURRENT_HOSTNAME" == *sp4* || "$CURRENT_HOSTNAME" == *sp5* ]]; then
+          if [[ "$VERSION_ID" == "15.4" || "$VERSION_ID" == "15.5" ]]; then
             PYTHON_INTERPRETER_LINE='ansible_python_interpreter: "/usr/bin/python3"'
           fi
 
@@ -111,7 +113,7 @@ runs:
               trento_hosts:
                 vars:
                   ${PYTHON_INTERPRETER_LINE}
-                  $([[ "$CURRENT_HOSTNAME" == *sp4* ]] && echo "enable_suseconnect: false")
+                  $([[ "$VERSION_ID" == "15.4" ]] && echo "enable_suseconnect: false")
                   provision_prometheus: true
                   prometheus_enable_remote_write_receiver: false
                   provision_proxy: true
