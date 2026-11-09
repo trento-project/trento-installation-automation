@@ -1,0 +1,193 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Provision On-Demand Environment
+run-name: Provision on-demand environment ${{ inputs.environment_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: 'Name of the on-demand environment to provision. Creates resource group trento-env-<name> and names the VMs trento<sles>sp<sp>-<name>.'
+        type: string
+        required: true
+      sles_15_sp4:
+        description: 'Deploy to SLES 15 SP4'
+        type: boolean
+        default: true
+      sles_15_sp5:
+        description: 'Deploy to SLES 15 SP5'
+        type: boolean
+        default: true
+      sles_15_sp6:
+        description: 'Deploy to SLES 15 SP6'
+        type: boolean
+        default: true
+      sles_15_sp7:
+        description: 'Deploy to SLES 15 SP7'
+        type: boolean
+        default: true
+      sles_16_0:
+        description: 'Deploy to SLES 16'
+        type: boolean
+        default: true
+      install_rolling:
+        description: 'Install Trento from the rolling repository instead of the RPMs in Azure Blob Storage'
+        type: boolean
+        default: false
+
+# Must differ from the group used by the base workflow (trento-installation-tests-<name>),
+# otherwise the called workflow would wait for this run forever. It still serialises
+# two runs of the same name, so the second one fails the existence check.
+concurrency:
+  group: ${{ format('provision-on-demand-environment-{0}', inputs.environment_name) }}
+  cancel-in-progress: false
+
+jobs:
+  create-resource-group:
+    name: Create resource group
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    outputs:
+      resource_group: ${{ steps.names.outputs.resource_group }}
+      location: ${{ steps.create.outputs.location }}
+      os_versions: ${{ steps.select-os-versions.outputs.os_versions }}
+
+    env:
+      ENVIRONMENT_NAME: ${{ inputs.environment_name }}
+
+    steps:
+      # The name becomes the environment_suffix and part of the VM DNS labels (63 characters max,
+      # 12 of them taken by the trento<sles>sp<sp>- prefix), so it must also satisfy terraform/variables.tf.
+      - name: Validate environment name
+        id: names
+        run: |
+          if ! [[ "$ENVIRONMENT_NAME" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+            echo "Error: environment_name must be lowercase alphanumeric or hyphens, and must not start or end with a hyphen." >&2
+            exit 1
+          fi
+          if (( ${#ENVIRONMENT_NAME} > 40 )); then
+            echo "Error: environment_name must be at most 40 characters long." >&2
+            exit 1
+          fi
+          echo "resource_group=trento-env-${ENVIRONMENT_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Select OS versions
+        id: select-os-versions
+        run: |
+          selected_versions=()
+
+          if [[ "${{ inputs.sles_15_sp4 }}" == 'true' ]]; then
+            selected_versions+=("15.4")
+          fi
+          if [[ "${{ inputs.sles_15_sp5 }}" == 'true' ]]; then
+            selected_versions+=("15.5")
+          fi
+          if [[ "${{ inputs.sles_15_sp6 }}" == 'true' ]]; then
+            selected_versions+=("15.6")
+          fi
+          if [[ "${{ inputs.sles_15_sp7 }}" == 'true' ]]; then
+            selected_versions+=("15.7")
+          fi
+          if [[ "${{ inputs.sles_16_0 }}" == 'true' ]]; then
+            selected_versions+=("16.0")
+          fi
+
+          if [ ${#selected_versions[@]} -eq 0 ]; then
+            echo "Error: Select at least one supported SLES version." >&2
+            exit 1
+          fi
+
+          {
+            echo "os_versions<<EOF"
+            printf '%s\n' "${selected_versions[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Azure Login
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Check resource group does not exist
+        env:
+          RESOURCE_GROUP: ${{ steps.names.outputs.resource_group }}
+        run: |
+          if [[ "$(az group exists --name "$RESOURCE_GROUP")" == 'true' ]]; then
+            echo "Error: resource group $RESOURCE_GROUP already exists; destroy it first or choose another environment_name." >&2
+            exit 1
+          fi
+
+      # The ManagedBy tag is what the Destroy On-Demand Environment workflow checks before deleting the group.
+      - name: Create resource group
+        id: create
+        env:
+          RESOURCE_GROUP: ${{ steps.names.outputs.resource_group }}
+          BACKEND_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          OWNER_TAG: ${{ vars.AZURE_OWNER_TAG }}
+          CREATED_BY: ${{ github.actor }}
+        run: |
+          LOCATION=$(az group show --name "$BACKEND_RESOURCE_GROUP" --query location -o tsv)
+          if [ -z "$LOCATION" ]; then
+            echo "Error: Could not retrieve location for resource group $BACKEND_RESOURCE_GROUP" >&2
+            exit 1
+          fi
+
+          az group create \
+            --name "$RESOURCE_GROUP" \
+            --location "$LOCATION" \
+            --tags \
+              ManagedBy=trento-installation-automation \
+              Owner="$OWNER_TAG" \
+              Environment="$ENVIRONMENT_NAME" \
+              CreatedBy="$CREATED_BY" \
+            --output none
+
+          echo "location=$LOCATION" >> "$GITHUB_OUTPUT"
+
+  provision:
+    name: Provision environment
+    needs: create-resource-group
+    uses: ./.github/workflows/trento-installation-base.yml
+    with:
+      sles_15_sp4: ${{ inputs.sles_15_sp4 }}
+      sles_15_sp5: ${{ inputs.sles_15_sp5 }}
+      sles_15_sp6: ${{ inputs.sles_15_sp6 }}
+      sles_15_sp7: ${{ inputs.sles_15_sp7 }}
+      sles_16_0: ${{ inputs.sles_16_0 }}
+      package_source: ${{ inputs.install_rolling && 'rolling' || 'blob_storage' }}
+      skip_cypress: true
+      skip_alerting_tests: true
+      destroy_after: false
+      azure_resource_group: ${{ needs.create-resource-group.outputs.resource_group }}
+      environment_suffix: ${{ format('-{0}', inputs.environment_name) }}
+    secrets: inherit
+
+  summary:
+    name: Publish environment URLs
+    needs:
+      - create-resource-group
+      - provision
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Write FQDNs to the run summary
+        env:
+          ENVIRONMENT_NAME: ${{ inputs.environment_name }}
+          RESOURCE_GROUP: ${{ needs.create-resource-group.outputs.resource_group }}
+          LOCATION: ${{ needs.create-resource-group.outputs.location }}
+          OS_VERSIONS: ${{ needs.create-resource-group.outputs.os_versions }}
+        run: |
+          {
+            echo "## On-demand environment \`$ENVIRONMENT_NAME\`"
+            echo
+            echo "Resource group: \`$RESOURCE_GROUP\`"
+            echo
+            while IFS= read -r version; do
+              [ -z "$version" ] && continue
+              echo "- SLES ${version}: https://trento${version%%.*}sp${version##*.}-${ENVIRONMENT_NAME}.${LOCATION}.cloudapp.azure.com/"
+            done <<< "$OS_VERSIONS"
+          } >> "$GITHUB_STEP_SUMMARY"
