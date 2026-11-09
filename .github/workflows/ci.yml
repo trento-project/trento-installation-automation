@@ -14,7 +14,7 @@ on:
 # Superseded runs are queued instead of canceled: canceling mid `terraform apply` leaves
 # an orphaned state lock and resources that the state file never recorded.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: trento-installation-tests
   cancel-in-progress: false
 
 jobs:
