@@ -50,6 +50,11 @@ on:
         type: string
         default: ''
 
+# Serialise with the other runs sharing the default environment's Terraform state.
+concurrency:
+  group: trento-installation-tests
+  cancel-in-progress: false
+
 jobs:
   installation-tests:
     name: Run installation tests

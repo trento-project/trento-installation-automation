@@ -34,6 +34,11 @@ on:
           - 'blob_storage'
           - 'rolling'
 
+# Serialise with the other runs sharing the default environment's Terraform state.
+concurrency:
+  group: trento-installation-tests
+  cancel-in-progress: false
+
 jobs:
   provision:
     name: Provision infrastructure

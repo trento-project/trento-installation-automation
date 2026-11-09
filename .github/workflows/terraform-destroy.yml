@@ -1,20 +1,10 @@
 # SPDX-FileCopyrightText: SUSE LLC
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-name: Destroy Infrastructure
-# Destroy Azure Resources
+name: Terraform Destroy
 
+# Reusable. The caller is responsible for the concurrency group of the environment.
 on:
-  workflow_dispatch:
-    inputs:
-      azure_resource_group:
-        description: 'Azure resource group the environment was deployed into. Leave empty to use vars.AZURE_RESOURCE_GROUP.'
-        type: string
-        default: ''
-      environment_suffix:
-        description: 'Suffix appended to VM and network resource names (e.g. -foo). Also selects the Terraform state blob terraform<suffix>.tfstate.'
-        type: string
-        default: ''
   workflow_call:
     inputs:
       azure_resource_group:
@@ -25,15 +15,6 @@ on:
         description: 'Suffix appended to VM and network resource names (e.g. -foo). Also selects the Terraform state blob terraform<suffix>.tfstate.'
         type: string
         default: ''
-      caller_holds_concurrency_group:
-        description: 'Set by callers that already hold the environment concurrency group, to avoid a deadlock.'
-        type: boolean
-        default: false
-
-# Serialise with deployments of the same environment so a cleanup cannot tear it down mid-run.
-concurrency:
-  group: ${{ inputs.caller_holds_concurrency_group && format('destroy-infrastructure-{0}', github.run_id) || format('trento-installation-tests{0}', inputs.environment_suffix) }}
-  cancel-in-progress: false
 
 env:
   AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}

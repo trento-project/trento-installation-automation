@@ -59,13 +59,11 @@ on:
         type: string
         default: ''
       environment_suffix:
-        description: 'Suffix appended to VM and network resource names (e.g. -foo). Also selects the Terraform state blob terraform<suffix>.tfstate and the concurrency group.'
+        description: 'Suffix appended to VM and network resource names (e.g. -foo). Also selects the Terraform state blob terraform<suffix>.tfstate.'
         type: string
         default: ''
-# One group per state blob: runs sharing a state serialise, other environments do not queue behind them.
-concurrency:
-  group: ${{ format('trento-installation-tests{0}', inputs.environment_suffix) }}
-  cancel-in-progress: false
+# Callers must hold the concurrency group trento-installation-tests<environment_suffix>, so that
+# runs sharing a Terraform state serialise.
 
 env:
   AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
@@ -590,5 +588,4 @@ jobs:
     with:
       azure_resource_group: ${{ inputs.azure_resource_group }}
       environment_suffix: ${{ inputs.environment_suffix }}
-      caller_holds_concurrency_group: true
     secrets: inherit

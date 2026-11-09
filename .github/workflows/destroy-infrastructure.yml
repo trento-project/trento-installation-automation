@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Destroy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      azure_resource_group:
+        description: 'Azure resource group the environment was deployed into. Leave empty to use vars.AZURE_RESOURCE_GROUP.'
+        type: string
+        default: ''
+      environment_suffix:
+        description: 'Suffix appended to VM and network resource names (e.g. -foo). Also selects the Terraform state blob terraform<suffix>.tfstate.'
+        type: string
+        default: ''
+
+# Serialise with deployments of the same environment so a cleanup cannot tear it down mid-run.
+concurrency:
+  group: ${{ format('trento-installation-tests{0}', inputs.environment_suffix) }}
+  cancel-in-progress: false
+
+jobs:
+  terraform-destroy:
+    name: Terraform Destroy
+    uses: ./.github/workflows/terraform-destroy.yml
+    with:
+      azure_resource_group: ${{ inputs.azure_resource_group }}
+      environment_suffix: ${{ inputs.environment_suffix }}
+    secrets: inherit
