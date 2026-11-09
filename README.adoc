@@ -171,7 +171,7 @@ The workflow recreates the Terraform-managed infrastructure, registers SUSE mach
 
 Two behaviors are worth knowing before launching a run:
 
-* Manually dispatched runs do **not** destroy the infrastructure when they finish, so the deployed environments stay available for manual inspection. Destroy them with the *Azure Cleanup* workflow once you are done.
+* Manually dispatched runs do **not** destroy the infrastructure when they finish, so the deployed environments stay available for manual inspection. Destroy them with the *Destroy Infrastructure* workflow once you are done.
 * All runs share the `trento-installation-tests` concurrency group and are never canceled, so a run started while another one is in progress waits in the queue instead of starting immediately.
 
 === Choosing which packages to test
@@ -228,7 +228,7 @@ The **Continuous Integration** workflow runs on pushes to `main`, pull request o
 
 To destroy all provisioned infrastructure:
 
-. Go to **Actions** > **Azure Cleanup**
+. Go to **Actions** > **Destroy Infrastructure**
 . Click **Run workflow**
 
 The cleanup workflow always generates the full machine configuration for every supported SLES version before running `terraform destroy`, so manual cleanup and CI cleanup both target all Terraform-managed infrastructure by default.
