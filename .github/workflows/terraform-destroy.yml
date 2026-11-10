@@ -1,20 +1,9 @@
 # SPDX-FileCopyrightText: SUSE LLC
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-name: Azure Cleanup
-# Destroy Azure Resources
+name: Terraform Destroy
 
 on:
-  workflow_dispatch:
-    inputs:
-      azure_resource_group:
-        description: 'Azure resource group the environment was deployed into. Leave empty to use vars.AZURE_RESOURCE_GROUP.'
-        type: string
-        default: ''
-      environment_suffix:
-        description: 'Suffix appended to VM and network resource names (e.g. -foo). Also selects the Terraform state blob terraform<suffix>.tfstate.'
-        type: string
-        default: ''
   workflow_call:
     inputs:
       azure_resource_group:
@@ -25,15 +14,6 @@ on:
         description: 'Suffix appended to VM and network resource names (e.g. -foo). Also selects the Terraform state blob terraform<suffix>.tfstate.'
         type: string
         default: ''
-      caller_holds_concurrency_group:
-        description: 'Set by callers that already hold the environment concurrency group, to avoid a deadlock.'
-        type: boolean
-        default: false
-
-# Serialise with deployments of the same environment so a cleanup cannot tear it down mid-run.
-concurrency:
-  group: ${{ inputs.caller_holds_concurrency_group && format('azure-cleanup-{0}', github.run_id) || format('trento-installation-tests{0}', inputs.environment_suffix) }}
-  cancel-in-progress: false
 
 env:
   AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
@@ -50,17 +30,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # Mirrors the environment_suffix validation in terraform/variables.tf, which
-      # runs too late: the suffix already names the state blob at init time.
-      - name: Validate environment suffix
-        env:
-          ENVIRONMENT_SUFFIX: ${{ inputs.environment_suffix }}
-        run: |
-          if ! [[ "$ENVIRONMENT_SUFFIX" =~ ^[a-z0-9-]*$ ]] || [[ "$ENVIRONMENT_SUFFIX" == *- ]]; then
-            echo "Error: environment_suffix must be lowercase alphanumeric or hyphens, and must not end with a hyphen." >&2
-            exit 1
-          fi
 
       - name: Generate machines config CSV
         uses: ./.github/actions/generate-machines-config
