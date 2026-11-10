@@ -114,7 +114,6 @@ jobs:
           OWNER_TAG: ${{ vars.AZURE_OWNER_TAG }}
           CREATED_BY: ${{ github.actor }}
           MANAGED_BY_TAG: trento-installation-automation
-          VM_PREFIX: 'trento15sp7-'
         run: |
           RG_EXISTS=$(az group exists --name "$RESOURCE_GROUP")
 
@@ -131,7 +130,8 @@ jobs:
 
           # The FQDN is the CN of the host certificate, which OpenSSL limits to 64 characters.
           FQDN_SUFFIX=".${LOCATION}.cloudapp.azure.com"
-          MAX_NAME_LENGTH=$(( 64 - ${#FQDN_SUFFIX} - ${#VM_PREFIX} ))
+          # 12 is the length of the host name prefix, e.g. 'trento15sp7-' (trento<major>sp<minor>-).
+          MAX_NAME_LENGTH=$(( 64 - ${#FQDN_SUFFIX} - 12 ))
           if (( ${#ENVIRONMENT_NAME} > MAX_NAME_LENGTH )); then
             echo "Error: environment_name must be at most $MAX_NAME_LENGTH characters long in $LOCATION so the host FQDN fits in a 64 character certificate CN." >&2
             exit 1
