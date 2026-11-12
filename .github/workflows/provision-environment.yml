@@ -176,7 +176,6 @@ jobs:
       skip_alerting_tests: ${{ inputs.skip_alerting_tests }}
       cypress_spec: ${{ inputs.cypress_spec }}
       web_ref: ${{ inputs.web_ref }}
-      destroy_after: false
       azure_resource_group: ${{ needs.create-resource-group.outputs.resource_group }}
       environment_suffix: ${{ format('-{0}', inputs.environment_name) }}
     secrets: inherit
@@ -216,5 +215,5 @@ jobs:
               echo "- SLES ${version}: \`trento${version%%.*}sp${version##*.}-${ENVIRONMENT_NAME}.${LOCATION}.cloudapp.azure.com\`"
             done <<< "$OS_VERSIONS"
             echo
-            echo "The environment is kept after the run. Delete the resource group \`${RESOURCE_GROUP}\` when you are done."
+            echo "The environment is kept after the run. Run the Destroy Environment workflow with \`${ENVIRONMENT_NAME}\` when you are done."
           } >> "$GITHUB_STEP_SUMMARY"

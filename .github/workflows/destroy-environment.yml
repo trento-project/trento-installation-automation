@@ -1,0 +1,144 @@
+# SPDX-FileCopyrightText: SUSE LLC
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Destroy Environment
+run-name: Destroy environment ${{ inputs.environment_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: 'Name of the environment to destroy. Deletes resource group trento-env-<name> and its Terraform state.'
+        type: string
+        required: true
+
+# Same group as Provision & Test Environment, so destroying never races a provisioning of the same environment.
+concurrency:
+  group: ${{ format('trento-installation-tests-{0}', inputs.environment_name) }}
+  cancel-in-progress: false
+
+env:
+  AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
+  AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
+
+jobs:
+  destroy-environment:
+    name: Destroy environment
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    env:
+      ENVIRONMENT_NAME: ${{ inputs.environment_name }}
+      BACKEND_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      MANAGED_BY_TAG: trento-installation-automation
+
+    steps:
+      # Same validation as the environment_suffix variable in terraform/variables.tf.
+      - name: Validate environment name
+        run: |
+          if ! [[ "$ENVIRONMENT_NAME" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+            echo "Error: environment_name must be lowercase alphanumeric or hyphens, and must not start or end with a hyphen." >&2
+            exit 1
+          fi
+
+      - name: Azure Login
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Delete resource group
+        id: rg
+        run: |
+          RESOURCE_GROUP="trento-env-${ENVIRONMENT_NAME}"
+          echo "resource_group=$RESOURCE_GROUP" >> "$GITHUB_OUTPUT"
+
+          # Azure resource group names are case-insensitive.
+          if [[ "${RESOURCE_GROUP,,}" == "${BACKEND_RESOURCE_GROUP,,}" ]]; then
+            echo "Error: refusing to delete the Terraform backend resource group." >&2
+            exit 1
+          fi
+
+          GROUP_EXISTS=$(az group exists --name "$RESOURCE_GROUP")
+
+          if [[ "$GROUP_EXISTS" == 'false' ]]; then
+            echo "::notice::Resource group $RESOURCE_GROUP does not exist; nothing to delete."
+            echo "result=not found" >> "$GITHUB_OUTPUT"
+            exit 0
+          elif [[ "$GROUP_EXISTS" != 'true' ]]; then
+            echo "Error: unexpected output from 'az group exists': '$GROUP_EXISTS'." >&2
+            exit 1
+          fi
+
+          MANAGED_BY=$(az group show --name "$RESOURCE_GROUP" --query 'tags.ManagedBy' -o tsv)
+          if [[ "$MANAGED_BY" != "$MANAGED_BY_TAG" ]]; then
+            echo "Error: resource group $RESOURCE_GROUP is not tagged ManagedBy=$MANAGED_BY_TAG; refusing to delete it." >&2
+            exit 1
+          fi
+
+          az group delete --name "$RESOURCE_GROUP" --yes --output none
+          echo "result=deleted" >> "$GITHUB_OUTPUT"
+
+      - name: Delete Terraform state blob
+        id: state
+        env:
+          STATE_BLOB: ${{ format('terraform-{0}.tfstate', inputs.environment_name) }}
+        run: |
+          EXISTS=$(az storage blob exists \
+            --account-name "$AZURE_BLOB_STORAGE" \
+            --container-name "$AZURE_BLOB_STORAGE_TF_STATE_CONTAINER" \
+            --name "$STATE_BLOB" \
+            --auth-mode key \
+            --query exists -o tsv)
+
+          if [[ "$EXISTS" != 'true' ]]; then
+            echo "::notice::State blob $STATE_BLOB does not exist; nothing to delete."
+            echo "result=not found" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # An interrupted Terraform run can leave the state blob with an infinite lease,
+          # which makes the delete fail with LeaseIdMissing. The environment is already gone, so the lease is stale.
+          LEASE_STATE=$(az storage blob show \
+            --account-name "$AZURE_BLOB_STORAGE" \
+            --container-name "$AZURE_BLOB_STORAGE_TF_STATE_CONTAINER" \
+            --name "$STATE_BLOB" \
+            --auth-mode key \
+            --query properties.lease.state -o tsv)
+
+          if [[ "$LEASE_STATE" == 'leased' ]]; then
+            echo "::warning::State blob $STATE_BLOB is leased (stale Terraform lock); breaking the lease."
+            az storage blob lease break \
+              --account-name "$AZURE_BLOB_STORAGE" \
+              --container-name "$AZURE_BLOB_STORAGE_TF_STATE_CONTAINER" \
+              --blob-name "$STATE_BLOB" \
+              --lease-break-period 0 \
+              --auth-mode key \
+              --output none
+          fi
+
+          az storage blob delete \
+            --account-name "$AZURE_BLOB_STORAGE" \
+            --container-name "$AZURE_BLOB_STORAGE_TF_STATE_CONTAINER" \
+            --name "$STATE_BLOB" \
+            --delete-snapshots include \
+            --auth-mode key \
+            --output none
+          echo "result=deleted" >> "$GITHUB_OUTPUT"
+
+      - name: Write result to the run summary
+        if: ${{ !cancelled() }}
+        env:
+          RESOURCE_GROUP: ${{ steps.rg.outputs.resource_group }}
+          RG_RESULT: ${{ steps.rg.outputs.result || 'not run or failed' }}
+          STATE_RESULT: ${{ steps.state.outputs.result || 'not run or failed' }}
+        run: |
+          {
+            echo "## Environment \`$ENVIRONMENT_NAME\`"
+            echo
+            echo "| Resource | Result |"
+            echo "| --- | --- |"
+            echo "| Resource group \`$RESOURCE_GROUP\` | $RG_RESULT |"
+            echo "| Terraform state blob | $STATE_RESULT |"
+          } >> "$GITHUB_STEP_SUMMARY"

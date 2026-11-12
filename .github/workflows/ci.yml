@@ -17,6 +17,10 @@ concurrency:
   group: trento-installation-tests
   cancel-in-progress: false
 
+env:
+  AZURE_BLOB_STORAGE: ${{ vars.AZURE_BLOB_STORAGE }}
+  AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
+
 jobs:
   ci:
     name: Run deployments & tests
@@ -33,15 +37,63 @@ jobs:
       package_source: 'rolling'
       skip_alerting_tests: true
       cypress_spec: '**/about.cy.js'
-      destroy_after: true
     secrets: inherit
+
+  # Always tear down the CI infrastructure, even if the deployments or tests failed.
+  # The full machine configuration is generated so every supported SLES version is destroyed.
+  destroy:
+    name: Destroy infrastructure
+    needs: ci
+    if: ${{ always() && needs.ci.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Generate machines config CSV
+        uses: ./.github/actions/generate-machines-config
+        with:
+          os_versions: |
+            15.4
+            15.5
+            15.6
+            15.7
+            16.0
+
+      - name: Azure Login
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Extract Azure Credentials
+        id: azure-creds
+        uses: ./.github/actions/extract-azure-credentials
+        with:
+          azure_credentials: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Run Terraform Destroy
+        uses: ./.github/actions/terraform-destroy
+        with:
+          azure_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          backend_resource_group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          state_key: terraform.tfstate
+          azure_owner_tag: ${{ vars.AZURE_OWNER_TAG }}
+          ssh_public_key_content: ${{ vars.PUBLIC_SSH_KEY_CONTENT }}
+          client_id: ${{ steps.azure-creds.outputs.client_id }}
+          client_secret: ${{ steps.azure-creds.outputs.client_secret }}
+          tenant_id: ${{ steps.azure-creds.outputs.tenant_id }}
+          subscription_id: ${{ steps.azure-creds.outputs.subscription_id }}
 
   # Fixed name to use as the required status check: the Cypress jobs are a
   # matrix and their names embed the host FQDN.
   ci-passed:
     name: CI passed
-    needs: ci
+    needs: [ci, destroy]
     if: always()
     runs-on: ubuntu-24.04
     steps:
-      - run: '[ "${{ needs.ci.result }}" = success ]'
+      - run: '[ "${{ needs.ci.result }}" = success ] && [ "${{ needs.destroy.result }}" = success ]'
