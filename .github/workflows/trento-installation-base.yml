@@ -50,10 +50,6 @@ on:
         description: 'Branch, tag or commit of trento-project/web to take the Cypress tests from. Leave empty to use its default branch.'
         type: string
         default: ''
-      destroy_after:
-        description: 'Destroy Terraform-managed infrastructure after the workflow finishes'
-        type: boolean
-        default: false
       azure_resource_group:
         description: 'Azure resource group to deploy into. Leave empty to use vars.AZURE_RESOURCE_GROUP. The Terraform state backend always lives in vars.AZURE_RESOURCE_GROUP.'
         type: string
@@ -170,6 +166,7 @@ jobs:
           echo "ARM_SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID" >> $GITHUB_ENV
           echo "Subscription ID set successfully"
 
+      # Start from a clean state if the environment already exists.
       - name: Terraform Destroy
         working-directory: ./terraform
         run: terraform destroy -auto-approve -input=false
@@ -540,17 +537,3 @@ jobs:
         run: |
           docker compose logs mailpit
           cat tunnel.log
-
-  cleanup:
-    name: Destroy infrastructure
-    needs:
-      - provision-and-deploy
-      - cypress-full-suite
-      - cypress-alerting-from-env
-      - cypress-alerting-from-ui
-    if: ${{ always() && inputs.destroy_after }}
-    uses: ./.github/workflows/terraform-destroy.yml
-    with:
-      azure_resource_group: ${{ inputs.azure_resource_group }}
-      environment_suffix: ${{ inputs.environment_suffix }}
-    secrets: inherit

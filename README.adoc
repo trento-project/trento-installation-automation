@@ -161,7 +161,7 @@ The workflow creates the resource group, or reuses it if it already exists and i
 
 Two behaviors are worth knowing before launching a run:
 
-* The infrastructure is **not** destroyed when the run finishes, so the environment stays available for debugging, even if a step failed. Delete its resource group (`trento-env-<name>`) once you are done.
+* The infrastructure is **not** destroyed when the run finishes, so the environment stays available for debugging, even if a step failed. Run the **Destroy Environment** workflow once you are done.
 * Runs of the same environment share a concurrency group. A run in progress is never canceled and a new one waits for it, but GitHub keeps only one pending run per group: if a third run is queued, it replaces the pending one, which is canceled.
 
 === Choosing which packages to test
@@ -216,7 +216,9 @@ The **Continuous Integration** workflow runs on pushes to `main`, pull request o
 
 === Cleanup
 
-The infrastructure of the **Continuous Integration** workflow is destroyed by the reusable `terraform-destroy.yml` workflow, which always generates the full machine configuration for every supported SLES version before running `terraform destroy`. It is not meant to be dispatched manually.
+The infrastructure of the **Continuous Integration** workflow is destroyed by its own `destroy` job, which runs even if the deployments or tests fail. It always generates the full machine configuration for every supported SLES version before running `terraform destroy`.
+
+To remove an environment created with **Provision & Test Environment**, go to **Actions** > **Destroy Environment**, click **Run workflow** and set the same `environment_name`. The workflow deletes the resource group `trento-env-<name>` (only if it is tagged `ManagedBy=trento-installation-automation`, otherwise it fails without deleting anything) together with the Terraform state blob `terraform-<name>.tfstate`. If the resource group is already gone, it only removes the leftover state blob. If an interrupted run left the state blob locked by a stale Terraform lease, the workflow breaks the lease before deleting it. Runs of the same environment share a concurrency group with the provision workflow, so a destroy waits for a provisioning in progress.
 
 == Supported SLES Versions
 
