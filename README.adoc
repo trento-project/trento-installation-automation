@@ -22,9 +22,16 @@ The infrastructure consists of a single VM per supported SLES version. Each
 machine runs the `suse.trento.site` playbook against itself: its Ansible
 inventory contains only its own public FQDN, reached over SSH.
 
-VM naming convention: `+trento{slesVersion}sp{spVersion}+`
+VM naming convention: `+trento{slesVersion}sp{spVersion}+` for the Continuous Integration deployments and `+trento{slesVersion}sp{spVersion}-<environment_name>+` for the environments created with **Provision & Test Environment**.
 
-Example: `trento15sp6` for SLES 15 SP6.
+Examples: `trento15sp6` for SLES 15 SP6 in CI, and `trento15sp6-foo` for SLES 15 SP6 in the `foo` environment.
+
+=== Resource groups
+
+Two kinds of Azure resource groups are involved:
+
+* The one named by the `AZURE_RESOURCE_GROUP` variable holds the storage account with the Terraform state and the RPMs, and is also where the Continuous Integration deployments run. It is shared and long-lived, and the Destroy Environment workflow refuses to delete it.
+* Every environment created with **Provision & Test Environment** gets its own resource group `trento-env-<environment_name>`, tagged `ManagedBy=trento-installation-automation`. Its Terraform state is still kept in the storage account of the first one (`terraform-<environment_name>.tfstate`), so deleting the environment resource group does not delete its own state.
 
 == Prerequisites
 
@@ -107,7 +114,7 @@ NOTE: When `package_source` is set to `blob_storage` (the default), packages ava
 | Variable | Description
 
 | `AZURE_RESOURCE_GROUP`
-| Azure resource group name
+| Resource group holding the storage account with the Terraform state and the RPMs. Continuous Integration also deploys into it. See <<Resource groups>>
 
 | `AZURE_OWNER_TAG`
 | Owner tag for Azure resources
@@ -158,6 +165,15 @@ Manual runs always target an isolated named environment, so they never interfere
 . Click **Run workflow**
 
 The workflow creates the resource group, or reuses it if it already exists and is tagged `ManagedBy=trento-installation-automation` (any other existing group makes it fail before touching anything). It then destroys and recreates the Terraform-managed infrastructure and installs Trento. The run summary lists the parameters used, and the run name identifies the environment.
+
+The `environment_name` is a shared namespace. Before picking one, list the environments that are currently provisioned, because two people using the same name collide on the same resource group and Terraform state, and on the VM DNS label (`domain_name_label`), which is globally unique per Azure region:
+
+[source,bash]
+----
+az group list \
+  --query "[?starts_with(name,'trento-env-') && tags.ManagedBy=='trento-installation-automation'].{Name:name, Owner:tags.Owner, CreatedBy:tags.CreatedBy}" \
+  -o table
+----
 
 Two behaviors are worth knowing before launching a run:
 
