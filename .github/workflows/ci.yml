@@ -7,8 +7,14 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "**.adoc"
+      - "LICENSE"
   pull_request:
     types: [opened, synchronize]
+    paths-ignore:
+      - "**.adoc"
+      - "LICENSE"
   workflow_dispatch:
 
 # Superseded runs are queued instead of canceled: canceling mid `terraform apply` leaves
@@ -22,38 +28,9 @@ env:
   AZURE_BLOB_STORAGE_TF_STATE_CONTAINER: ${{ vars.AZURE_BLOB_STORAGE_TF_STATE_CONTAINER }}
 
 jobs:
-  # The workflow cannot use `paths-ignore`: a skipped workflow never reports the required
-  # `CI passed` check and would block the PR. Instead, it always runs and skips the expensive jobs.
-  changes:
-    name: Detect docs-only changes
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      code: ${{ steps.filter.outputs.code }}
-    steps:
-      - id: filter
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          if [ -z "$PR_NUMBER" ]; then
-            echo "code=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          files=$(gh api --paginate "repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" --jq '.[].filename')
-          # Only docs-only PRs skip the deployment: any other changed file runs it.
-          if echo "$files" | grep -qvE '\.adoc$|^LICENSE$'; then
-            echo "code=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "code=false" >> "$GITHUB_OUTPUT"
-          fi
-
   ci:
     name: Run deployments & tests
-    needs: changes
-    if: ${{ needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     uses: ./.github/workflows/trento-installation-base.yml
     with:
       # Action bumps only affect the runner, not the target OS. Test SLES 15 SP7
@@ -116,17 +93,3 @@ jobs:
           client_secret: ${{ steps.azure-creds.outputs.client_secret }}
           tenant_id: ${{ steps.azure-creds.outputs.tenant_id }}
           subscription_id: ${{ steps.azure-creds.outputs.subscription_id }}
-
-  # Fixed name to use as the required status check: the Cypress jobs are a
-  # matrix and their names embed the host FQDN.
-  ci-passed:
-    name: CI passed
-    needs: [changes, ci, destroy]
-    if: always()
-    runs-on: ubuntu-24.04
-    steps:
-      - run: |
-          [ "${{ needs.changes.result }}" = success ] || exit 1
-          # Docs-only changes skip the deployment on purpose.
-          [ "${{ needs.changes.outputs.code }}" = false ] && exit 0
-          [ "${{ needs.ci.result }}" = success ] && [ "${{ needs.destroy.result }}" = success ]
