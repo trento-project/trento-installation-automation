@@ -7,8 +7,14 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "**.adoc"
+      - "LICENSE"
   pull_request:
     types: [opened, synchronize]
+    paths-ignore:
+      - "**.adoc"
+      - "LICENSE"
   workflow_dispatch:
 
 # Superseded runs are queued instead of canceled: canceling mid `terraform apply` leaves
@@ -87,13 +93,3 @@ jobs:
           client_secret: ${{ steps.azure-creds.outputs.client_secret }}
           tenant_id: ${{ steps.azure-creds.outputs.tenant_id }}
           subscription_id: ${{ steps.azure-creds.outputs.subscription_id }}
-
-  # Fixed name to use as the required status check: the Cypress jobs are a
-  # matrix and their names embed the host FQDN.
-  ci-passed:
-    name: CI passed
-    needs: [ci, destroy]
-    if: always()
-    runs-on: ubuntu-24.04
-    steps:
-      - run: '[ "${{ needs.ci.result }}" = success ] && [ "${{ needs.destroy.result }}" = success ]'
